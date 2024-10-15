@@ -43,7 +43,19 @@ func (pu *userUsecase) GetUser(ctx context.Context, req *model.GetUserRequest) (
 
 	pu.log.Infof("Fetched user: %+v", user)
 	return &model.GetUserResponse{
-		UserID: user.UserID,
+		UserID:       user.UserID,
+		Email:        user.Email,
+		PasswordHash: user.PasswordHash,
+		FullName:     user.FullName,
+		PhoneNumber:  user.PhoneNumber,
+		Address:      user.Address,
+		Role:         user.Role,
+		ImageURL:     user.ImageURL,
+		Token:        user.Token,
+		IsDeleted:    user.IsDeleted,
+		TokenExpires: user.TokenExpires.Format(tsCreateTimeLayout),
+		CreatedAt:    user.CreatedAt.Format(tsCreateTimeLayout),
+		UpdatedAt:    user.UpdatedAt.Format(tsCreateTimeLayout),
 	}, nil
 }
 
@@ -82,9 +94,7 @@ func (pu *userUsecase) CreateUser(ctx context.Context, user *model.CreateUserReq
 	pu.log.Infof("Creating user: %+v", user)
 	userData := repository.User{
 		Email:        user.Email,
-		PasswordHash: user.PasswordHash,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		PasswordHash: user.Password,
 	}
 
 	createdUser, err := pu.userRepo.Create(ctx, &userData)

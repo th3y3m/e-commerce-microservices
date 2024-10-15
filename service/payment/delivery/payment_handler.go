@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"strconv"
 	"th3y3m/e-commerce-microservices/service/payment/dependency_injection"
 	"th3y3m/e-commerce-microservices/service/payment/model"
 
@@ -12,14 +13,17 @@ func GetPaymentByID(c *gin.Context) {
 	module := dependency_injection.NewPaymentUsecaseProvider()
 
 	var req model.GetPaymentRequest
-	err := c.BindJSON(&req)
+
+	id := c.Param("payment_id")
+	paymentID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		logrus.Error(err)
 		c.JSON(400, gin.H{
-			"error": "Bad Request",
+			"error": "Invalid Payment ID",
 		})
 		return
 	}
+	req.PaymentID = paymentID
 
 	payment, err := module.GetPayment(c, &req)
 	if err != nil {
@@ -110,7 +114,12 @@ func GetPaginatedPayment(c *gin.Context) {
 		})
 		return
 	}
-
+	if req.Paging.PageIndex == 0 {
+		req.Paging.PageIndex = 1
+	}
+	if req.Paging.PageSize == 0 {
+		req.Paging.PageSize = 10
+	}
 	payments, err := module.GetPaymentList(c, &req)
 	if err != nil {
 		logrus.Error(err)

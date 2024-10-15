@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Details</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            width: 80%;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            padding: 10px 0;
+        }
+
+        .header h1 {
+            margin: 0;
+        }
+
+        .order-details {
+            margin: 20px 0;
+        }
+
+        .order-details h2 {
+            margin: 0 0 10px 0;
+        }
+
+        .order-details table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .order-details table,
+        .order-details th,
+        .order-details td {
+            border: 1px solid #ddd;
+        }
+
+        .order-details th,
+        .order-details td {
+            padding: 8px;
+            text-align: left;
+        }
+
+        .order-details th {
+            background-color: #f2f2f2;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 10px 0;
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+
+        .product-image {
+            width: 100px;
+            /* Adjust the width as needed */
+            height: 100px;
+            /* Adjust the height as needed */
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Order Details</h1>
+        </div>
+        <div class="order-details">
+            <h2>Customer Information</h2>
+            <p><strong>Name:</strong> {{.Customer.FullName}}</p>
+            <p><strong>Email:</strong> {{.Customer.Email}}</p>
+            <p><strong>Phone:</strong> {{.Customer.PhoneNumber}}</p>
+            <p><strong>Address:</strong> {{.Customer.Address}}</p>
+        </div>
+        <div class="order-details">
+            <h2>Order Information</h2>
+            <p><strong>Order ID:</strong> {{.Order.OrderID}}</p>
+            <p><strong>Order Date:</strong> {{.Order.OrderDate}}</p>
+            <p><strong>Total Amount:</strong> ${{.Order.TotalAmount}}</p>
+            <p><strong>Order Status:</strong> {{.Order.OrderStatus}}</p>
+            <p><strong>Shipping Address:</strong> {{.Order.ShippingAddress}}</p>
+        </div>
+        <div class="order-details">
+            <h2>Order Items</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Image</th>
+                        <th>Product Name</th>
+                        <th>Description</th>
+                        <th>Quantity</th>
+                        <th>Unit Price</th>
+                        <th>Total Price</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .OrderDetailsWithProduct}}
+                    <tr>
+                        <td><img src="{{.Product.ImageURL}}" alt="Product Image" class="product-image"></td>
+                        <td>{{.Product.ProductName}}</td>
+                        <td>{{.Product.Description}}</td>
+                        <td>{{.OrderDetail.Quantity}}</td>
+                        <td>${{.OrderDetail.UnitPrice}}</td>
+                        <td>${{multiply (toFloat64 .OrderDetail.Quantity) .OrderDetail.UnitPrice}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        <div class="footer">
+            <p>Thank you for your order!</p>
+        </div>
+    </div>
+</body>
+
+</html>

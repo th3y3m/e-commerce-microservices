@@ -96,8 +96,6 @@ func (pu *productUsecase) CreateProduct(ctx context.Context, product *model.Crea
 		Quantity:    product.Quantity,
 		CategoryID:  product.CategoryID,
 		ImageURL:    product.ImageURL,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
 	}
 
 	createdProduct, err := pu.productRepo.Create(ctx, &productData)

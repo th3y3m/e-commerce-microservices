@@ -78,8 +78,6 @@ func (pu *discountUsecase) CreateDiscount(ctx context.Context, discount *model.C
 		DiscountValue: discount.DiscountValue,
 		StartDate:     discount.StartDate,
 		EndDate:       discount.EndDate,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
 	})
 	if err != nil {
 		pu.log.Errorf("Error creating discount: %v", err)

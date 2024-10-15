@@ -43,7 +43,20 @@ func (pu *orderUsecase) GetOrder(ctx context.Context, req *model.GetOrderRequest
 
 	pu.log.Infof("Fetched order: %+v", order)
 	return &model.GetOrderResponse{
-		OrderID: order.OrderID,
+		OrderID:               order.OrderID,
+		CustomerID:            order.CustomerID,
+		OrderDate:             order.OrderDate.Format(tsCreateTimeLayout),
+		ShippingAddress:       order.ShippingAddress,
+		CourierID:             order.CourierID,
+		TotalAmount:           order.TotalAmount,
+		OrderStatus:           order.OrderStatus,
+		FreightPrice:          order.FreightPrice,
+		EstimatedDeliveryDate: order.EstimatedDeliveryDate.Format(tsCreateTimeLayout),
+		ActualDeliveryDate:    order.ActualDeliveryDate.Format(tsCreateTimeLayout),
+		VoucherID:             order.VoucherID,
+		IsDeleted:             order.IsDeleted,
+		CreatedAt:             order.CreatedAt.Format(tsCreateTimeLayout),
+		UpdatedAt:             order.UpdatedAt.Format(tsCreateTimeLayout),
 	}, nil
 }
 
@@ -92,8 +105,6 @@ func (pu *orderUsecase) CreateOrder(ctx context.Context, order *model.CreateOrde
 		EstimatedDeliveryDate: order.EstimatedDeliveryDate,
 		ActualDeliveryDate:    order.ActualDeliveryDate,
 		VoucherID:             order.VoucherID,
-		CreatedAt:             time.Now(),
-		UpdatedAt:             time.Now(),
 	}
 
 	createdOrder, err := pu.orderRepo.Create(ctx, &orderData)
@@ -150,12 +161,15 @@ func (pu *orderUsecase) UpdateOrder(ctx context.Context, rep *model.UpdateOrderR
 	}
 
 	order.CustomerID = rep.CustomerID
+	order.OrderDate = rep.OrderDate
 	order.ShippingAddress = rep.ShippingAddress
 	order.CourierID = rep.CourierID
 	order.TotalAmount = rep.TotalAmount
 	order.OrderStatus = rep.OrderStatus
 	order.FreightPrice = rep.FreightPrice
 	order.VoucherID = rep.VoucherID
+	order.ActualDeliveryDate = rep.ActualDeliveryDate
+	order.EstimatedDeliveryDate = rep.EstimatedDeliveryDate
 	order.UpdatedAt = time.Now()
 	order.IsDeleted = rep.IsDeleted
 

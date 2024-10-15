@@ -10,20 +10,21 @@ import (
 )
 
 func GetProductByID(c *gin.Context) {
-	productID := c.Param("product_id")
 	module := dependency_injection.NewProductUsecaseProvider()
 
-	id, err := strconv.ParseInt(productID, 10, 64)
+	productIDStr := c.Param("product_id")
+	productID, err := strconv.ParseInt(productIDStr, 10, 64)
 	if err != nil {
 		logrus.Error(err)
 		c.JSON(400, gin.H{
-			"error": "Bad Request",
+			"error": "Invalid product ID",
 		})
 		return
 	}
 
-	var req model.GetProductRequest
-	req.ProductID = id
+	req := model.GetProductRequest{
+		ProductID: productID,
+	}
 
 	product, err := module.GetProduct(c, &req)
 	if err != nil {
@@ -103,10 +104,10 @@ func UpdateProduct(c *gin.Context) {
 }
 
 func DeleteProduct(c *gin.Context) {
-	productID := c.Param("product_id")
 	module := dependency_injection.NewProductUsecaseProvider()
 
-	id, err := strconv.ParseInt(productID, 10, 64)
+	var req model.DeleteProductRequest
+	err := c.BindJSON(&req)
 	if err != nil {
 		logrus.Error(err)
 		c.JSON(400, gin.H{
@@ -114,10 +115,6 @@ func DeleteProduct(c *gin.Context) {
 		})
 		return
 	}
-
-	var req model.DeleteProductRequest
-	req.ProductID = id
-
 	err = module.DeleteProduct(c, &req)
 	if err != nil {
 		logrus.Error(err)
@@ -133,31 +130,24 @@ func DeleteProduct(c *gin.Context) {
 }
 
 func GetPaginatedProduct(c *gin.Context) {
-	page := c.DefaultQuery("page_index", "1")
-	limit := c.DefaultQuery("page_size", "10")
 	module := dependency_injection.NewProductUsecaseProvider()
 
-	p, err := strconv.Atoi(page)
-	if err != nil {
-		logrus.Error(err)
-		c.JSON(400, gin.H{
-			"error": "Bad Request",
-		})
-		return
-	}
-
-	l, err := strconv.Atoi(limit)
-	if err != nil {
-		logrus.Error(err)
-		c.JSON(400, gin.H{
-			"error": "Bad Request",
-		})
-		return
-	}
-
 	var req model.GetProductsRequest
-	req.Paging.PageIndex = p
-	req.Paging.PageSize = l
+	err := c.BindJSON(&req)
+	if err != nil {
+		logrus.Error(err)
+		c.JSON(400, gin.H{
+			"error": "Bad Request",
+		})
+		return
+	}
+
+	if req.Paging.PageIndex == 0 {
+		req.Paging.PageIndex = 1
+	}
+	if req.Paging.PageSize == 0 {
+		req.Paging.PageSize = 10
+	}
 
 	products, err := module.GetProductList(c, &req)
 	if err != nil {

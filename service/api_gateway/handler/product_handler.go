@@ -20,7 +20,8 @@ func GetProductByID(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	c.JSON(resp.StatusCode, resp.Body)
+	c.Status(resp.StatusCode)
+	io.Copy(c.Writer, resp.Body)
 }
 
 // GetPaginatedProducts proxies the request to the product service
@@ -36,7 +37,6 @@ func GetPaginatedProducts(c *gin.Context) {
 
 	c.Status(resp.StatusCode)
 	io.Copy(c.Writer, resp.Body)
-
 }
 
 // CreateProduct proxies the POST request to the product service

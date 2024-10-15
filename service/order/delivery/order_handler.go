@@ -4,22 +4,28 @@ import (
 	"th3y3m/e-commerce-microservices/service/order/dependency_injection"
 	"th3y3m/e-commerce-microservices/service/order/model"
 
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
 
 func GetOrderByID(c *gin.Context) {
+	id := c.Param("order_id")
+
 	module := dependency_injection.NewOrderUsecaseProvider()
 
-	var req model.GetOrderRequest
-	err := c.BindJSON(&req)
+	orderID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		logrus.Error(err)
 		c.JSON(400, gin.H{
-			"error": "Bad Request",
+			"error": "Invalid Order ID",
 		})
 		return
 	}
+
+	var req model.GetOrderRequest
+	req.OrderID = orderID
 
 	order, err := module.GetOrder(c, &req)
 	if err != nil {
@@ -136,6 +142,13 @@ func GetPaginatedOrder(c *gin.Context) {
 			"error": "Bad Request",
 		})
 		return
+	}
+
+	if req.Paging.PageIndex == 0 {
+		req.Paging.PageIndex = 1
+	}
+	if req.Paging.PageSize == 0 {
+		req.Paging.PageSize = 10
 	}
 
 	orders, err := module.GetOrderList(c, &req)

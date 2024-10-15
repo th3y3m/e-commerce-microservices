@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 	"strings"
-	"th3y3m/e-commerce-microservices/service/product/delivery"
+	"th3y3m/e-commerce-microservices/service/payment/delivery"
 
 	"github.com/spf13/viper"
 )

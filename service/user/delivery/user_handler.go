@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"net/http"
 	"th3y3m/e-commerce-microservices/service/user/dependency_injection"
 	"th3y3m/e-commerce-microservices/service/user/model"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func GetUserByID(c *gin.Context) {
+func GetUser(c *gin.Context) {
 	module := dependency_injection.NewUserUsecaseProvider()
 
 	var req model.GetUserRequest
@@ -50,27 +51,25 @@ func GetAllUsers(c *gin.Context) {
 
 func CreateUser(c *gin.Context) {
 	var req model.CreateUserRequest
-	err := c.BindJSON(&req)
-	if err != nil {
-		logrus.Error(err)
-		c.JSON(400, gin.H{
-			"error": "Bad Request",
-		})
+	if err := c.BindJSON(&req); err != nil {
+		logrus.Error("Failed to bind JSON: ", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad Request", "details": err.Error()})
 		return
 	}
 
+	// Inject the UserUsecase (through dependency injection)
 	module := dependency_injection.NewUserUsecaseProvider()
 
+	// Call CreateUser usecase function
 	user, err := module.CreateUser(c, &req)
 	if err != nil {
-		logrus.Error(err)
-		c.JSON(500, gin.H{
-			"error": "Internal Server Error",
-		})
+		logrus.Error("Failed to create user: ", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error", "details": err.Error()})
 		return
 	}
 
-	c.JSON(200, user)
+	// Respond with the created user data
+	c.JSON(http.StatusOK, user)
 }
 
 func UpdateUser(c *gin.Context) {
@@ -137,7 +136,12 @@ func GetPaginatedUser(c *gin.Context) {
 		})
 		return
 	}
-
+	if req.Paging.PageIndex == 0 {
+		req.Paging.PageIndex = 1
+	}
+	if req.Paging.PageSize == 0 {
+		req.Paging.PageSize = 10
+	}
 	users, err := module.GetUserList(c, &req)
 	if err != nil {
 		logrus.Error(err)

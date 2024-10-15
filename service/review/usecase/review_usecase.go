@@ -80,9 +80,6 @@ func (pu *reviewUsecase) CreateReview(ctx context.Context, review *model.CreateR
 		UserID:    review.UserID,
 		Rating:    review.Rating,
 		Comment:   review.Comment,
-		IsDeleted: false,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
 	}
 
 	createdReview, err := pu.reviewRepo.Create(ctx, &reviewData)

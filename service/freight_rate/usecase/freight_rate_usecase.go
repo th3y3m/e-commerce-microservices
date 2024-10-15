@@ -86,9 +86,6 @@ func (pu *freightRateUsecase) CreateFreightRate(ctx context.Context, freightRate
 		DistanceMinKM: freightRate.DistanceMinKM,
 		DistanceMaxKM: freightRate.DistanceMaxKM,
 		CostPerKM:     freightRate.CostPerKM,
-		IsDeleted:     false,
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
 	}
 
 	createdFreightRate, err := pu.freightRateRepo.Create(ctx, newFreightRate)

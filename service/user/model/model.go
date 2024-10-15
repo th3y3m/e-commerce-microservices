@@ -43,8 +43,8 @@ type GetUserResponse struct {
 }
 
 type CreateUserRequest struct {
-	Email        string `json:"email"`
-	PasswordHash string `json:"password_hash"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type UpdateUserRequest struct {

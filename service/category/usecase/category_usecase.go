@@ -73,8 +73,6 @@ func (pu *categoryUsecase) CreateCategory(ctx context.Context, category *model.C
 	pu.log.Infof("Creating category: %+v", category)
 	createdCategory, err := pu.categoryRepo.Create(ctx, &repository.Category{
 		CategoryName: category.CategoryName,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
 	})
 	if err != nil {
 		pu.log.Errorf("Error creating category: %v", err)

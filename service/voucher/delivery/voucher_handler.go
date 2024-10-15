@@ -137,7 +137,12 @@ func GetPaginatedVoucher(c *gin.Context) {
 		})
 		return
 	}
-
+	if req.Paging.PageIndex == 0 {
+		req.Paging.PageIndex = 1
+	}
+	if req.Paging.PageSize == 0 {
+		req.Paging.PageSize = 10
+	}
 	vouchers, err := module.GetVoucherList(c, &req)
 	if err != nil {
 		logrus.Error(err)

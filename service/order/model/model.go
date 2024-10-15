@@ -61,16 +61,16 @@ type CreateOrderRequest struct {
 }
 
 type UpdateOrderRequest struct {
-	OrderID               int64   `json:"order_id"`
-	CustomerID            int64   `json:"customer_id"`
-	OrderDate             string  `json:"order_date"`
-	TotalAmount           float64 `json:"total_amount"`
-	OrderStatus           string  `json:"order_status"`
-	ShippingAddress       string  `json:"shipping_address"`
-	CourierID             int64   `json:"courier_id"`
-	FreightPrice          float64 `json:"freight_price"`
-	EstimatedDeliveryDate string  `json:"estimated_delivery_date"`
-	ActualDeliveryDate    string  `json:"actual_delivery_date"`
-	VoucherID             int64   `json:"voucher_id"`
-	IsDeleted             bool    `json:"is_deleted"`
+	OrderID               int64     `json:"order_id"`
+	CustomerID            int64     `json:"customer_id"`
+	OrderDate             time.Time `json:"order_date"`
+	TotalAmount           float64   `json:"total_amount"`
+	OrderStatus           string    `json:"order_status"`
+	ShippingAddress       string    `json:"shipping_address"`
+	CourierID             int64     `json:"courier_id"`
+	FreightPrice          float64   `json:"freight_price"`
+	EstimatedDeliveryDate time.Time `json:"estimated_delivery_date"`
+	ActualDeliveryDate    time.Time `json:"actual_delivery_date"`
+	VoucherID             int64     `json:"voucher_id"`
+	IsDeleted             bool      `json:"is_deleted"`
 }

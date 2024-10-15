@@ -194,7 +194,7 @@ func (pr *paymentRepository) GetList(ctx context.Context, req *model.GetPayments
 	var order string
 
 	if req.Paging.Sort == "" {
-		sort = "payment_amount"
+		sort = "payment_date"
 	} else {
 		sort = req.Paging.Sort
 	}

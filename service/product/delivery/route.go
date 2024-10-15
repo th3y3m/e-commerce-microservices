@@ -12,8 +12,8 @@ func RegisterHandlers() *gin.Engine {
 		product.GET("/:product_id", GetProductByID)
 		product.GET("/", GetPaginatedProduct)
 		product.POST("/", CreateProduct)
-		product.PUT("/:product_id", UpdateProduct)
-		product.DELETE("/:product_id", DeleteProduct)
+		product.PUT("/", UpdateProduct)
+		product.DELETE("/", DeleteProduct)
 	}
 
 	return r

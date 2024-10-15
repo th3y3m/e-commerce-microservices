@@ -42,7 +42,13 @@ func (pu *paymentUsecase) GetPayment(ctx context.Context, req *model.GetPaymentR
 
 	pu.log.Infof("Fetched payment: %+v", payment)
 	return &model.GetPaymentResponse{
-		PaymentID: payment.PaymentID,
+		PaymentID:        payment.PaymentID,
+		OrderID:          payment.OrderID,
+		PaymentAmount:    payment.PaymentAmount,
+		PaymentDate:      payment.PaymentDate.Format(tsCreateTimeLayout),
+		PaymentMethod:    payment.PaymentMethod,
+		PaymentStatus:    payment.PaymentStatus,
+		PaymentSignature: payment.PaymentSignature,
 	}, nil
 }
 

@@ -72,8 +72,6 @@ func (pu *courierUsecase) CreateCourier(ctx context.Context, courier *model.Crea
 	pu.log.Infof("Creating courier: %+v", courier)
 	createdCourier, err := pu.courierRepo.Create(ctx, &repository.Courier{
 		CourierName: courier.CourierName,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
 	})
 	if err != nil {
 		pu.log.Errorf("Error creating courier: %v", err)

@@ -133,31 +133,24 @@ func DeleteNews(c *gin.Context) {
 }
 
 func GetPaginatedNews(c *gin.Context) {
-	page := c.DefaultQuery("page_index", "1")
-	limit := c.DefaultQuery("page_size", "10")
 	module := dependency_injection.NewNewsUsecaseProvider()
 
-	p, err := strconv.Atoi(page)
-	if err != nil {
-		logrus.Error(err)
-		c.JSON(400, gin.H{
-			"error": "Bad Request",
-		})
-		return
-	}
-
-	l, err := strconv.Atoi(limit)
-	if err != nil {
-		logrus.Error(err)
-		c.JSON(400, gin.H{
-			"error": "Bad Request",
-		})
-		return
-	}
-
 	var req model.GetNewsRequest
-	req.Paging.PageIndex = p
-	req.Paging.PageSize = l
+	err := c.BindJSON(&req)
+	if err != nil {
+		logrus.Error(err)
+		c.JSON(400, gin.H{
+			"error": "Bad Request",
+		})
+		return
+	}
+
+	if req.Paging.PageIndex == 0 {
+		req.Paging.PageIndex = 1
+	}
+	if req.Paging.PageSize == 0 {
+		req.Paging.PageSize = 10
+	}
 
 	news, err := module.GetNewsList(c, &req)
 	if err != nil {

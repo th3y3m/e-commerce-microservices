@@ -85,8 +85,6 @@ func (pu *newUsecase) CreateNews(ctx context.Context, new *model.CreateNewsReque
 		Category:      new.Category,
 		IsDeleted:     new.IsDeleted,
 		PublishedDate: time.Now(),
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
 	}
 
 	createdNew, err := pu.newRepo.Create(ctx, &newData)

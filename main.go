@@ -170,7 +170,7 @@ func main() {
 	}
 
 	// Auto-migrate the schemas
-	db.AutoMigrate(&Product{})
+	db.AutoMigrate(&Product{}, &User{}, &Cart{}, &CartItem{}, &Category{}, &Courier{}, &Discount{}, &FreightRate{}, &Order{}, &OrderDetail{}, &ProductDiscount{}, &Review{}, &Payment{}, &Voucher{}, &News{})
 
 	log.Println("Database migration completed successfully!")
 

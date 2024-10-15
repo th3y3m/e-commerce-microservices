@@ -90,9 +90,6 @@ func (pu *voucherUsecase) CreateVoucher(ctx context.Context, voucher *model.Crea
 		EndDate:            voucher.EndDate,
 		UsageLimit:         voucher.UsageLimit,
 		UsageCount:         voucher.UsageCount,
-		IsDeleted:          false,
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
 	}
 
 	createdVoucher, err := pu.voucherRepo.Create(ctx, &voucherData)

@@ -9,11 +9,11 @@ func RegisterHandlers() *gin.Engine {
 
 	user := r.Group("/api/users")
 	{
-		user.GET("/:user_id", GetUserByID)
+		user.GET("/get-user", GetUser)
 		user.GET("/", GetPaginatedUser)
 		user.POST("/", CreateUser)
-		user.PUT("/:user_id", UpdateUser)
-		user.DELETE("/:user_id", DeleteUser)
+		user.PUT("/", UpdateUser)
+		user.DELETE("/", DeleteUser)
 	}
 
 	return r
