@@ -60,7 +60,7 @@ func DeleteProductDiscount(c *gin.Context) {
 	})
 }
 
-func GetPaginatedProductDiscount(c *gin.Context) {
+func GetProductDiscountList(c *gin.Context) {
 	module := dependency_injection.NewProductDiscountUsecaseProvider()
 
 	var req model.GetProductDiscountsRequest

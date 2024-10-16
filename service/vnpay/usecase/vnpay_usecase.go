@@ -5,110 +5,99 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"sort"
 	"strconv"
+	"strings"
 	"th3y3m/e-commerce-microservices/pkg/constant"
 	"th3y3m/e-commerce-microservices/pkg/util"
-	"th3y3m/e-commerce-microservices/service/momo/model"
+	"th3y3m/e-commerce-microservices/service/vnpay/model"
+	"time"
 
-	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
-// IMoMoUsecase is the interface that defines the MoMo usecase methods.
-type IMoMoUsecase interface {
-	CreateMoMoUrl(amount float64, orderId string) (string, error)
-	ValidateMoMoResponse(queryString url.Values) (*model.PaymentResponse, error)
-}
+var TimeZoneAsiaHoChiMinh, _ = time.LoadLocation("Asia/Ho_Chi_Minh")
 
-func NewMoMoUsecase(log *logrus.Logger) IMoMoUsecase {
+func NewVnpayUsecase(log *logrus.Logger) IVnpayUsecase {
 
-	return &MoMoService{
-		endpoint:    viper.GetString("MOMO_ENDPOINT"),
-		secretKey:   viper.GetString("MOMO_SECRET_KEY"),
-		accessKey:   viper.GetString("MOMO_ACCESS_KEY"),
-		returnUrl:   viper.GetString("MOMO_RETURN_URL"),
-		notifyUrl:   viper.GetString("MOMO_NOTIFY_URL"),
-		partnerCode: viper.GetString("MOMO_PARTNER_CODE"),
-		requestType: viper.GetString("MOMO_REQUEST_TYPE"),
-		extraData:   viper.GetString("MOMO_EXTRA_DATA"),
-		log:         log,
+	return &VnpayUsecase{
+		url:        viper.GetString("VNPAY_URL"),
+		returnUrl:  viper.GetString("VNPAY_RETURN_URL"),
+		tmnCode:    viper.GetString("VNPAY_TMNCODE"),
+		hashSecret: viper.GetString("VNPAY_HASH_SECRET"),
+		log:        log,
 	}
 }
 
-type MoMoService struct {
-	endpoint    string
-	secretKey   string
-	accessKey   string
-	returnUrl   string
-	notifyUrl   string
-	partnerCode string
-	requestType string
-	extraData   string
-	log         *logrus.Logger
+type IVnpayUsecase interface {
+	CreateVNPayUrl(amount float64, orderinfor string) (string, error)
+	ValidateVNPayResponse(queryString url.Values) (*model.PaymentResponse, error)
 }
 
-// CreatePaymentUrl generates a payment URL for the given amount and order details.
-func (s *MoMoService) CreateMoMoUrl(amount float64, orderId string) (string, error) {
-	requestId := uuid.New().String()
-	orderInfo := "Customer"
-	formattedAmount := int64(amount * 1000) // Convert to VND
+type VnpayUsecase struct {
+	url        string
+	returnUrl  string
+	tmnCode    string
+	hashSecret string
+	log        *logrus.Logger
+}
 
-	// Create raw signature string
-	rawHash := fmt.Sprintf("accessKey=%s&amount=%d&extraData=%s&ipnUrl=%s&orderId=%s&orderInfo=%s&partnerCode=%s&redirectUrl=%s&requestId=%s&requestType=%s",
-		s.accessKey, formattedAmount, s.extraData, s.notifyUrl, orderId, orderInfo, s.partnerCode, s.returnUrl, requestId, s.requestType)
-	signature := util.HmacSHA256(s.secretKey, rawHash)
-
-	// Build request payload
-	paymentRequest := map[string]interface{}{
-		"partnerCode": s.partnerCode,
-		"partnerName": "MoMo",
-		"storeId":     "MoMoStore",
-		"requestId":   requestId,
-		"amount":      strconv.FormatInt(formattedAmount, 10),
-		"orderId":     orderId,
-		"orderInfo":   orderInfo,
-		"redirectUrl": s.returnUrl,
-		"ipnUrl":      s.notifyUrl,
-		"extraData":   s.extraData,
-		"requestType": s.requestType,
-		"signature":   signature,
-		"lang":        "en",
-	}
-
-	// Send POST request to MoMo API
-	response, err := util.SendHttpRequest(s.endpoint, paymentRequest)
+func (s *VnpayUsecase) CreateVNPayUrl(amount float64, orderinfor string) (string, error) {
+	hostName, err := os.Hostname()
 	if err != nil {
 		return "", err
 	}
 
-	// Parse response and extract payment URL
-	var jsonResponse map[string]interface{}
-	if err := json.Unmarshal([]byte(response), &jsonResponse); err != nil {
+	ipAddrs, err := net.LookupIP(hostName)
+	if err != nil || len(ipAddrs) == 0 {
 		return "", err
 	}
+	clientIPAddress := ipAddrs[0].String()
 
-	if payUrl, ok := jsonResponse["payUrl"].(string); ok {
-		return payUrl, nil
-	}
+	pay := util.NewPayLib()
+	vnpAmount := amount * 100000
+	pay.AddRequestData("vnp_Version", "2.1.0")
+	pay.AddRequestData("vnp_Command", "pay")
+	pay.AddRequestData("vnp_TmnCode", s.tmnCode)
+	pay.AddRequestData("vnp_Amount", fmt.Sprintf("%.0f", vnpAmount))
+	pay.AddRequestData("vnp_BankCode", "")
+	pay.AddRequestData("vnp_CreateDate", time.Now().Format("20060102150405"))
+	pay.AddRequestData("vnp_CurrCode", "VND")
+	pay.AddRequestData("vnp_IpAddr", clientIPAddress)
+	pay.AddRequestData("vnp_Locale", "vn")
+	pay.AddRequestData("vnp_OrderInfo", "Customer")
+	pay.AddRequestData("vnp_OrderType", "other")
+	pay.AddRequestData("vnp_ReturnUrl", s.returnUrl)
+	pay.AddRequestData("vnp_TxnRef", orderinfor)
 
-	if message, ok := jsonResponse["message"].(string); ok {
-		return "", fmt.Errorf("error creating payment URL: %s", message)
-	}
-
-	return "", errors.New("unexpected response from MoMo API")
+	TransactionUrl := pay.CreateRequestUrl(s.url, s.hashSecret)
+	return TransactionUrl, nil
 }
 
-func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.PaymentResponse, error) {
-	orderId := queryString.Get("orderId")
-	resultCode := queryString.Get("resultCode")
-	amount := queryString.Get("amount")
-	signature := queryString.Get("signature")
+func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.PaymentResponse, error) {
 
-	// Fetch the order details
-	res, err := http.Get(fmt.Sprintf("%s/%s", constant.ORDER_SERVICE, orderId))
+	vnpSecureHash := queryString.Get("vnp_SecureHash")
+	vnpAmount := queryString.Get("vnp_Amount")
+	queryString.Del("vnp_SecureHash")
+	queryString.Del("vnp_SecureHashType")
+
+	rawData := make([]string, 0, len(queryString))
+	for key, val := range queryString {
+		rawData = append(rawData, key+"="+strings.Join(val, ""))
+	}
+	sort.Strings(rawData)
+	rawQueryString := strings.Join(rawData, "&")
+
+	if !s.ValidateSignature(rawQueryString, vnpSecureHash, s.hashSecret) {
+		return &model.PaymentResponse{IsSuccessful: false, RedirectUrl: "LINK_INVALID"}, nil
+	}
+
+	res, err := http.Get(fmt.Sprintf("%s/%s", constant.ORDER_SERVICE, queryString.Get("vnp_TxnRef")))
 	if err != nil {
 		return nil, err
 	}
@@ -123,14 +112,15 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 		return nil, fmt.Errorf("error decoding order response: %v", err)
 	}
 
-	if order.OrderID == 0 || order.OrderStatus == "Complete" {
+	if order.OrderStatus == "Complete" {
 		return &model.PaymentResponse{
 			IsSuccessful: false,
-			RedirectUrl:  constant.PAYMENT_RESPONSE_REJECT_URL,
+			RedirectUrl:  "LINK_INVALID",
 		}, nil
 	}
 
-	if resultCode == "0" {
+	vnpResponseCode := queryString.Get("vnp_ResponseCode")
+	if vnpResponseCode == "00" && queryString.Get("vnp_TransactionStatus") == "00" {
 		order.OrderStatus = "Complete"
 		updateModel := model.UpdateOrderRequest{
 			OrderID:               order.OrderID,
@@ -175,16 +165,16 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 			return nil, errors.New("error updating order")
 		}
 
-		// Create the payment record
-		paymentAmount, err := strconv.ParseFloat(amount, 64)
+		paymentAmount, err := strconv.ParseFloat(vnpAmount, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid payment amount: %v", err)
 		}
+
 		paymentCreateModel := &model.CreatePaymentRequest{
 			OrderID:          order.OrderID,
 			PaymentAmount:    paymentAmount,
 			PaymentStatus:    "Complete",
-			PaymentSignature: signature,
+			PaymentSignature: queryString.Get("vnp_BankTranNo"),
 			PaymentMethod:    "MoMo",
 		}
 
@@ -215,13 +205,21 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 			return nil, errors.New("error creating payment")
 		}
 
+		// cart, err := s.shoppingCartService.GetUserShoppingCart(order.CustomerID)
+		// if err != nil {
+		// 	return nil, err
+		// }
+
+		// if err := s.shoppingCartService.UpdateShoppingCartStatus(cart.CartID, false); err != nil {
+		// 	return nil, err
+		// }
+
 		return &model.PaymentResponse{
 			IsSuccessful: true,
-			RedirectUrl:  constant.PAYMENT_RESPONSE_CONFIRM_URL + "?orderId=" + orderId,
+			RedirectUrl:  fmt.Sprintf("https://localhost:3000/confirm?orderId=%s", order.OrderID),
 		}, nil
 	}
 
-	// Handle payment failure
 	order.OrderStatus = "Cancelled"
 	updateModel := model.UpdateOrderRequest{
 		OrderID:               order.OrderID,
@@ -267,6 +265,10 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 
 	return &model.PaymentResponse{
 		IsSuccessful: false,
-		RedirectUrl:  constant.PAYMENT_RESPONSE_REJECT_URL + "?orderId=" + orderId,
+		RedirectUrl:  fmt.Sprintf("https://localhost:3000/reject?orderId=%s", queryString.Get("vnp_TxnRef")),
 	}, nil
+}
+
+func (s *VnpayUsecase) ValidateSignature(rspraw, inputHash, secretKey string) bool {
+	return util.HmacSHA512(secretKey, rspraw) == inputHash
 }

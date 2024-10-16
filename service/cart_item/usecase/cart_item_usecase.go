@@ -19,6 +19,7 @@ type ICartItemUsecase interface {
 	UpdateCartItem(ctx context.Context, rep *model.UpdateCartItemRequest) (*model.GetCartItemResponse, error)
 	DeleteCartItem(ctx context.Context, req *model.DeleteCartItemRequest) error
 	GetCartItemList(ctx context.Context, req *model.GetCartItemsRequest) ([]*model.GetCartItemResponse, error)
+	UpdateOrCreate(ctx context.Context, cartItem *model.UpdateOrCreateRequest) error
 }
 
 func NewCartItemUsecase(cartItemRepo repository.ICartItemRepository, log *logrus.Logger) ICartItemUsecase {
@@ -26,6 +27,25 @@ func NewCartItemUsecase(cartItemRepo repository.ICartItemRepository, log *logrus
 		cartItemRepo: cartItemRepo,
 		log:          log,
 	}
+}
+
+func (pu *cartItemUsecase) UpdateOrCreate(ctx context.Context, req *model.UpdateOrCreateRequest) error {
+	pu.log.Infof("Updating or creating cartItem: %+v", req)
+
+	cartItem := &repository.CartItem{
+		CartID:    req.CartID,
+		ProductID: req.ProductID,
+		Quantity:  req.Quantity,
+	}
+
+	err := pu.cartItemRepo.UpdateOrCreate(ctx, *cartItem)
+	if err != nil {
+		pu.log.Errorf("Error updating or creating cartItem: %v", err)
+		return err
+	}
+
+	pu.log.Infof("Updated or created cartItem: %+v", cartItem)
+	return nil
 }
 
 func (pu *cartItemUsecase) GetCartItem(ctx context.Context, req *model.GetCartItemRequest) (*model.GetCartItemResponse, error) {
@@ -97,22 +117,20 @@ func (pu *cartItemUsecase) DeleteCartItem(ctx context.Context, req *model.Delete
 }
 
 func (pu *cartItemUsecase) GetCartItemList(ctx context.Context, req *model.GetCartItemsRequest) ([]*model.GetCartItemResponse, error) {
-	pu.log.Infof("Fetching cartItems with cartID: %d and productID: %d", req.CartID, req.ProductID)
-	cartItems, err := pu.cartItemRepo.GetList(ctx, &req.CartID, &req.ProductID)
+	cartItems, err := pu.cartItemRepo.GetList(ctx, req.CartID, req.ProductID)
 	if err != nil {
 		pu.log.Errorf("Error fetching cartItems: %v", err)
 		return nil, err
 	}
 
-	var cartItemsResp []*model.GetCartItemResponse
+	var cartItemResponses []*model.GetCartItemResponse
 	for _, cartItem := range cartItems {
-		cartItemsResp = append(cartItemsResp, &model.GetCartItemResponse{
+		cartItemResponses = append(cartItemResponses, &model.GetCartItemResponse{
 			CartID:    cartItem.CartID,
 			ProductID: cartItem.ProductID,
 			Quantity:  cartItem.Quantity,
 		})
 	}
 
-	pu.log.Infof("Fetched cartItems: %+v", cartItemsResp)
-	return cartItemsResp, nil
+	return cartItemResponses, nil
 }

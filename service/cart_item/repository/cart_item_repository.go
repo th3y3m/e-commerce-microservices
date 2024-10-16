@@ -22,6 +22,7 @@ type ICartItemRepository interface {
 	Update(ctx context.Context, cartItem *CartItem) (*CartItem, error)
 	Delete(ctx context.Context, cartID, productID int64) error
 	GetList(ctx context.Context, cartID, productID *int64) ([]*CartItem, error)
+	UpdateOrCreate(ctx context.Context, cartItem CartItem) error
 }
 
 func NewCartItemRepository(db *gorm.DB, redis *redis.Client, log *logrus.Logger) ICartItemRepository {
@@ -34,7 +35,7 @@ func NewCartItemRepository(db *gorm.DB, redis *redis.Client, log *logrus.Logger)
 
 func (pr *cartItemRepository) Get(ctx context.Context, cartID, productID int64) (*CartItem, error) {
 	pr.log.Infof("Fetching cartItem with cartID: %d and productID: %d", cartID, productID)
-	cacheKey := fmt.Sprintf("cartItem:%d - %d", cartID, productID)
+	cacheKey := fmt.Sprintf("cartItem:%d:%d", cartID, productID)
 
 	// Try to get the cartItem from Redis cache
 	cachedCartItem, err := pr.redis.Get(ctx, cacheKey).Result()
@@ -57,7 +58,7 @@ func (pr *cartItemRepository) Get(ctx context.Context, cartID, productID int64) 
 	// Save to cache
 	cartItemJSON, _ := json.Marshal(cartItem)
 	pr.redis.Set(ctx, cacheKey, cartItemJSON, 0)
-	pr.log.Infof("CartItem saved to cache: %d - %d", cartID, productID)
+	pr.log.Infof("CartItem saved to cache: %d:%d", cartID, productID)
 
 	return &cartItem, nil
 }
@@ -69,20 +70,15 @@ func (pr *cartItemRepository) Create(ctx context.Context, cartItem *CartItem) (*
 		pr.log.Errorf("Error creating cartItem: %v", result.Error)
 		return nil, result.Error
 	}
-	cacheKey := fmt.Sprintf("cartItem:%d - %d", cartItem.CartID, cartItem.ProductID)
+	cacheKey := fmt.Sprintf("cartItem:%d:%d", cartItem.CartID, cartItem.ProductID)
 
 	// Save to cache
 	cartItemJSON, _ := json.Marshal(cartItem)
 	pr.redis.Set(ctx, cacheKey, cartItemJSON, 0)
-	pr.log.Infof("CartItem saved to cache: %d - %d", cartItem.CartID, cartItem.ProductID)
-
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_cartItems")
-	pr.log.Info("Invalidated cache for all cartItems")
+	pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
 
 	return cartItem, nil
 }
-
 func (pr *cartItemRepository) Update(ctx context.Context, cartItem *CartItem) (*CartItem, error) {
 	pr.log.Infof("Updating cartItem: %+v", cartItem)
 	result := pr.db.WithContext(ctx).Save(cartItem)
@@ -90,23 +86,19 @@ func (pr *cartItemRepository) Update(ctx context.Context, cartItem *CartItem) (*
 		pr.log.Errorf("Error updating cartItem: %v", result.Error)
 		return nil, result.Error
 	}
-	cacheKey := fmt.Sprintf("cartItem:%d - %d", cartItem.CartID, cartItem.ProductID)
+	cacheKey := fmt.Sprintf("cartItem:%d:%d", cartItem.CartID, cartItem.ProductID)
 
 	// Save to cache
 	cartItemJSON, _ := json.Marshal(cartItem)
 	pr.redis.Set(ctx, cacheKey, cartItemJSON, 0)
-	pr.log.Infof("CartItem saved to cache: %d - %d", cartItem.CartID, cartItem.ProductID)
-
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_cartItems")
-	pr.log.Info("Invalidated cache for all cartItems")
+	pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
 
 	return cartItem, nil
 }
 
 func (pr *cartItemRepository) Delete(ctx context.Context, cartID, productID int64) error {
 	pr.log.Infof("Deleting cartItem with cartID: %d and productID: %d", cartID, productID)
-	cacheKey := fmt.Sprintf("cartItem:%d - %d", cartID, productID)
+	cacheKey := fmt.Sprintf("cartItem:%d:%d", cartID, productID)
 
 	// Delete the cartItem from the database
 	result := pr.db.WithContext(ctx).Delete(&CartItem{}, "cart_id = ? AND product_id = ?", cartID, productID)
@@ -117,21 +109,28 @@ func (pr *cartItemRepository) Delete(ctx context.Context, cartID, productID int6
 
 	// Delete the cartItem from the cache
 	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("CartItem deleted from cache: %d", cartID)
-
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_cartItems")
-	pr.log.Info("Invalidated cache for all cartItems")
+	pr.log.Infof("CartItem deleted from cache: %d:%d", cartID, productID)
 
 	return nil
 }
 
 func (pr *cartItemRepository) GetList(ctx context.Context, cartID, productID *int64) ([]*CartItem, error) {
-	pr.log.Info("Fetching all cartItems")
+	pr.log.Info("Fetching cartItems")
 	var cartItems []*CartItem
+	var cacheKey string
+
+	// Build the query
+	query := pr.db.WithContext(ctx)
+	if cartID != nil {
+		cacheKey = fmt.Sprintf("cartItems:cartID:%d", *cartID)
+		query = query.Where("cart_id = ?", *cartID)
+	}
+	if productID != nil {
+		cacheKey = fmt.Sprintf("cartItems:productID:%d", *productID)
+		query = query.Where("product_id = ?", *productID)
+	}
 
 	// Try to get the cartItems from Redis cache
-	cacheKey := "all_cartItems"
 	cachedCartItems, err := pr.redis.Get(ctx, cacheKey).Result()
 	if err == nil {
 		if err := json.Unmarshal([]byte(cachedCartItems), &cartItems); err == nil {
@@ -141,13 +140,6 @@ func (pr *cartItemRepository) GetList(ctx context.Context, cartID, productID *in
 	}
 
 	// If not found in cache, get from database
-	query := pr.db.WithContext(ctx)
-	if cartID != nil {
-		query = query.Where("cart_id = ?", *cartID)
-	}
-	if productID != nil {
-		query = query.Where("product_id = ?", *productID)
-	}
 	result := query.Find(&cartItems)
 	if result.Error != nil {
 		pr.log.Errorf("Error fetching cartItems: %v", result.Error)
@@ -160,4 +152,42 @@ func (pr *cartItemRepository) GetList(ctx context.Context, cartID, productID *in
 	pr.log.Info("CartItems saved to cache")
 
 	return cartItems, nil
+}
+
+func (pr *cartItemRepository) UpdateOrCreate(ctx context.Context, cartItem CartItem) error {
+	pr.log.Infof("Updating or creating cart item with cart ID: %d and product ID: %d", cartItem.CartID, cartItem.ProductID)
+
+	var existingCartItem CartItem
+	cacheKey := fmt.Sprintf("cartItem:%d:%d", cartItem.CartID, cartItem.ProductID)
+
+	// Check if the cart item exists in the database
+	if err := pr.db.WithContext(ctx).Where("cart_id = ? AND product_id = ?", cartItem.CartID, cartItem.ProductID).First(&existingCartItem).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// Create new cart item if not found
+			pr.log.Infof("Cart item not found, creating new cart item with cart ID: %d and product ID: %d", cartItem.CartID, cartItem.ProductID)
+			if err := pr.db.WithContext(ctx).Create(&cartItem).Error; err != nil {
+				pr.log.Error("Failed to create new cart item:", err)
+				return err
+			}
+		} else {
+			pr.log.Error("Failed to fetch cart item for update or create:", err)
+			return err
+		}
+	} else {
+		// Update existing cart item
+		pr.log.Infof("Cart item found, updating cart item with cart ID: %d and product ID: %d", cartItem.CartID, cartItem.ProductID)
+		existingCartItem.Quantity = cartItem.Quantity
+		if err := pr.db.WithContext(ctx).Save(&existingCartItem).Error; err != nil {
+			pr.log.Error("Failed to update cart item:", err)
+			return err
+		}
+	}
+
+	// Save to cache
+	cartItemJSON, _ := json.Marshal(cartItem)
+	pr.redis.Set(ctx, cacheKey, cartItemJSON, 0)
+	pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
+
+	pr.log.Infof("Successfully updated or created cart item with cart ID: %d and product ID: %d", cartItem.CartID, cartItem.ProductID)
+	return nil
 }

@@ -4,6 +4,39 @@ import (
 	"time"
 )
 
+type Item struct {
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
+}
+type DeleteCartItemRequest struct {
+	CartID    int64 `json:"cart_id"`
+	ProductID int64 `json:"product_id"`
+}
+type UpdateOrCreateRequest struct {
+	CartID    int64 `json:"cart_id"`
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
+}
+type GetCartItemResponse struct {
+	CartID    int64 `json:"cart_id"`
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
+}
+type GetCartItemsRequest struct {
+	CartID    *int64 `json:"cart_id"`
+	ProductID *int64 `json:"product_id"`
+}
+type CartItem struct {
+	CartID    int64 `json:"cart_id"`
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
+}
+
+type SeachQueryRequest struct {
+	UserID    int64 `json:"user_id"`
+	IsDeleted bool  `json:"is_deleted"`
+}
+
 type GetCartRequest struct {
 	CartID int64 `json:"cart_id"`
 }

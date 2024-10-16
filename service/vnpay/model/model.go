@@ -2,6 +2,41 @@ package model
 
 import "time"
 
+type CreatePaymentRequest struct {
+	OrderID          int64   `json:"order_id"`
+	PaymentAmount    float64 `json:"payment_amount"`
+	PaymentMethod    string  `json:"payment_method"`
+	PaymentStatus    string  `json:"payment_status"`
+	PaymentSignature string  `json:"payment_signature"`
+}
+type UpdateOrderRequest struct {
+	OrderID               int64     `json:"order_id"`
+	CustomerID            int64     `json:"customer_id"`
+	OrderDate             time.Time `json:"order_date"`
+	TotalAmount           float64   `json:"total_amount"`
+	OrderStatus           string    `json:"order_status"`
+	ShippingAddress       string    `json:"shipping_address"`
+	CourierID             int64     `json:"courier_id"`
+	FreightPrice          float64   `json:"freight_price"`
+	EstimatedDeliveryDate time.Time `json:"estimated_delivery_date"`
+	ActualDeliveryDate    time.Time `json:"actual_delivery_date"`
+	VoucherID             int64     `json:"voucher_id"`
+	IsDeleted             bool      `json:"is_deleted"`
+}
+type Payment struct {
+	PaymentID        int64     `gorm:"primaryKey;column:payment_id;autoIncrement"`
+	OrderID          int64     `gorm:"column:order_id"`
+	PaymentAmount    float64   `gorm:"column:payment_amount"`
+	PaymentDate      time.Time `gorm:"autoCreateTime;column:payment_date"`
+	PaymentMethod    string    `gorm:"column:payment_method"`
+	PaymentStatus    string    `gorm:"column:payment_status"`
+	PaymentSignature string    `gorm:"column:payment_signature"`
+}
+type PaymentResponse struct {
+	IsSuccessful bool   `json:"is_successful"`
+	RedirectUrl  string `json:"redirect_url"`
+}
+
 type User struct {
 	UserID       int64     `gorm:"primaryKey;autoIncrement;column:user_id"`
 	Email        string    `gorm:"unique;not null;column:email"`

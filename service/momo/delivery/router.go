@@ -7,9 +7,10 @@ import (
 func RegisterHandlers() *gin.Engine {
 	r := gin.Default()
 
-	mail := r.Group("/api/mail")
+	momo := r.Group("/api/momo")
 	{
-		mail.POST("/", SendMail)
+		momo.POST("/", CreateMoMoUrl)
+		momo.GET("/validate", ValidateMoMoResponse)
 	}
 
 	return r

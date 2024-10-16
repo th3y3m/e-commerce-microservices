@@ -1,13 +1,19 @@
 package model
 
+type UpdateOrCreateRequest struct {
+	CartID    int64 `json:"cart_id"`
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
+}
+
 type GetCartItemRequest struct {
 	CartID    int64 `json:"cart_id"`
 	ProductID int64 `json:"product_id"`
 }
 
 type GetCartItemsRequest struct {
-	CartID    int64 `json:"cart_id"`
-	ProductID int64 `json:"product_id"`
+	CartID    *int64 `json:"cart_id"`
+	ProductID *int64 `json:"product_id"`
 }
 
 type DeleteCartItemRequest struct {

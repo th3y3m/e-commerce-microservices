@@ -21,6 +21,7 @@ type ICartRepository interface {
 	Create(ctx context.Context, cart *Cart) (*Cart, error)
 	Update(ctx context.Context, cart *Cart) (*Cart, error)
 	Delete(ctx context.Context, cartID int64) error
+	GetUserCart(ctx context.Context, userID int64) (*Cart, error)
 }
 
 func NewCartRepository(db *gorm.DB, redis *redis.Client, log *logrus.Logger) ICartRepository {
@@ -74,7 +75,6 @@ func (pr *cartRepository) Create(ctx context.Context, cart *Cart) (*Cart, error)
 	pr.log.Infof("Cart saved to cache: %d", cart.CartID)
 
 	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_carts")
 	pr.log.Info("Invalidated cache for all carts")
 
 	return cart, nil
@@ -92,27 +92,87 @@ func (pr *cartRepository) Update(ctx context.Context, cart *Cart) (*Cart, error)
 	pr.redis.Set(ctx, cacheKey, cartJSON, 0)
 	pr.log.Infof("Cart saved to cache: %d", cart.CartID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_carts")
-	pr.log.Info("Invalidated cache for all carts")
-
 	return cart, nil
 }
 
+// func (pr *cartRepository) Delete(ctx context.Context, cartID int64) error {
+// 	pr.log.Infof("Deleting cart with ID: %d", cartID)
+// 	if err := pr.db.WithContext(ctx).Delete(&Cart{}, cartID).Error; err != nil {
+// 		pr.log.Errorf("Error deleting cart: %v", err)
+// 		return err
+// 	}
+
+// 	cacheKey := fmt.Sprintf("cart:%d", cartID)
+// 	pr.redis.Del(ctx, cacheKey)
+// 	pr.log.Infof("Cart deleted from cache: %d", cartID)
+
+// 	// Invalidate the cache for all records
+// 	pr.redis.Del(ctx, "all_carts")
+// 	pr.log.Info("Invalidated cache for all carts")
+
+//		return nil
+//	}
 func (pr *cartRepository) Delete(ctx context.Context, cartID int64) error {
 	pr.log.Infof("Deleting cart with ID: %d", cartID)
+
+	cart, err := pr.Get(ctx, &cartID)
+	if err != nil {
+		pr.log.Errorf("Error fetching cart: %v", err)
+		return err
+	}
+
 	if err := pr.db.WithContext(ctx).Delete(&Cart{}, cartID).Error; err != nil {
 		pr.log.Errorf("Error deleting cart: %v", err)
 		return err
 	}
 
 	cacheKey := fmt.Sprintf("cart:%d", cartID)
+	cacheKeyUser := fmt.Sprintf("user_cart:%d", cart.UserID)
 	pr.redis.Del(ctx, cacheKey)
 	pr.log.Infof("Cart deleted from cache: %d", cartID)
-
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_carts")
-	pr.log.Info("Invalidated cache for all carts")
+	pr.redis.Del(ctx, cacheKeyUser)
+	pr.log.Infof("Cart deleted from cache: %d", cart.UserID)
 
 	return nil
+}
+
+func (pr *cartRepository) GetUserCart(ctx context.Context, userID int64) (*Cart, error) {
+	pr.log.Infof("Fetching cart for user: %d", userID)
+	cacheKey := fmt.Sprintf("user_cart:%d", userID)
+
+	// Try to get the cart from Redis cache
+	cachedCart, err := pr.redis.Get(ctx, cacheKey).Result()
+	if err == nil {
+		var cart Cart
+		if err := json.Unmarshal([]byte(cachedCart), &cart); err == nil {
+			pr.log.Infof("Cart found in cache for user: %d", userID)
+			return &cart, nil
+		}
+	}
+
+	// If not found in cache, get from database
+	var cart Cart
+	result := pr.db.WithContext(ctx).Where("user_id = ? AND is_deleted = ?", userID, false).Order("created_at DESC").First(&cart)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			pr.log.Infof("Cart not found for user: %d, creating new cart", userID)
+			newCart := &Cart{
+				UserID: userID,
+			}
+			createdCart, err := pr.Create(ctx, newCart)
+			if err != nil {
+				return nil, err
+			}
+			return createdCart, nil
+		}
+		pr.log.Errorf("Error fetching cart: %v", result.Error)
+		return nil, result.Error
+	}
+
+	// Save to cache
+	cartJSON, _ := json.Marshal(cart)
+	pr.redis.Set(ctx, cacheKey, cartJSON, 0)
+	pr.log.Infof("Cart saved to cache for user: %d", userID)
+
+	return &cart, nil
 }

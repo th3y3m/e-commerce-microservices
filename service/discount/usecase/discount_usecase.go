@@ -41,7 +41,14 @@ func (pu *discountUsecase) GetDiscount(ctx context.Context, req *model.GetDiscou
 
 	pu.log.Infof("Fetched discount: %+v", discount)
 	return &model.GetDiscountResponse{
-		DiscountID: discount.DiscountID,
+		DiscountID:    discount.DiscountID,
+		DiscountType:  discount.DiscountType,
+		DiscountValue: discount.DiscountValue,
+		StartDate:     discount.StartDate.Format(tsCreateTimeLayout),
+		EndDate:       discount.EndDate.Format(tsCreateTimeLayout),
+		IsDeleted:     discount.IsDeleted,
+		CreatedAt:     discount.CreatedAt.Format(tsCreateTimeLayout),
+		UpdatedAt:     discount.UpdatedAt.Format(tsCreateTimeLayout),
 	}, nil
 }
 

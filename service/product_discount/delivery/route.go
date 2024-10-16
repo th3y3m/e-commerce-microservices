@@ -9,7 +9,7 @@ func RegisterHandlers() *gin.Engine {
 
 	productDiscount := r.Group("/api/productDiscounts")
 	{
-		productDiscount.GET("/", GetPaginatedProductDiscount)
+		productDiscount.GET("/", GetProductDiscountList)
 		productDiscount.POST("/", CreateProductDiscount)
 		productDiscount.DELETE("/", DeleteProductDiscount)
 	}

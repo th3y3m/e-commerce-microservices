@@ -1,7 +1,12 @@
 package usecase
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"th3y3m/e-commerce-microservices/pkg/constant"
 	"th3y3m/e-commerce-microservices/pkg/util"
 	"th3y3m/e-commerce-microservices/service/product/model"
 	"th3y3m/e-commerce-microservices/service/product/repository"
@@ -11,6 +16,7 @@ import (
 )
 
 const tsCreateTimeLayout = "2006-01-02 15:04:05 +0700"
+const fallbackPrice = 1000.0 // Fallback price if the calculated price is less than 0
 
 type productUsecase struct {
 	log         *logrus.Logger
@@ -23,7 +29,8 @@ type IProductUsecase interface {
 	CreateProduct(ctx context.Context, req *model.CreateProductRequest) (*model.GetProductResponse, error)
 	UpdateProduct(ctx context.Context, rep *model.UpdateProductRequest) (*model.GetProductResponse, error)
 	DeleteProduct(ctx context.Context, req *model.DeleteProductRequest) error
-	GetProductList(ctx context.Context, req *model.GetProductsRequest) (*util.PaginatedList[model.GetProductResponse], error)
+	GetProductList(ctx context.Context, req *model.GetProductsRequest) (*util.PaginatedList[model.GetProductListResponse], error)
+	GetProductPriceAfterDiscount(ctx context.Context, req *model.GetProductPriceAfterDiscount) (float64, error)
 }
 
 func NewProductUsecase(productRepo repository.IProductRepository, log *logrus.Logger) IProductUsecase {
@@ -179,7 +186,7 @@ func (pu *productUsecase) UpdateProduct(ctx context.Context, rep *model.UpdatePr
 	}, nil
 }
 
-func (pu *productUsecase) GetProductList(ctx context.Context, req *model.GetProductsRequest) (*util.PaginatedList[model.GetProductResponse], error) {
+func (pu *productUsecase) GetProductList(ctx context.Context, req *model.GetProductsRequest) (*util.PaginatedList[model.GetProductListResponse], error) {
 	pu.log.Infof("Fetching product list with request: %+v", req)
 	products, err := pu.productRepo.GetList(ctx, req)
 	if err != nil {
@@ -187,24 +194,32 @@ func (pu *productUsecase) GetProductList(ctx context.Context, req *model.GetProd
 		return nil, err
 	}
 
-	var productResponses []model.GetProductResponse
+	var productResponses []model.GetProductListResponse
 	for _, product := range products {
-		productResponses = append(productResponses, model.GetProductResponse{
-			ProductID:   product.ProductID,
-			SellerID:    product.SellerID,
-			ProductName: product.ProductName,
-			Description: product.Description,
-			Price:       product.Price,
-			Quantity:    product.Quantity,
-			CategoryID:  product.CategoryID,
-			ImageURL:    product.ImageURL,
-			CreatedAt:   product.CreatedAt.Format(tsCreateTimeLayout),
-			UpdatedAt:   product.UpdatedAt.Format(tsCreateTimeLayout),
-			IsDeleted:   product.IsDeleted,
+		price, err := pu.GetProductPriceAfterDiscount(ctx, &model.GetProductPriceAfterDiscount{
+			ProductID: product.ProductID,
+		})
+		if err != nil {
+			pu.log.Errorf("Error fetching product price after discount: %v", err)
+			return nil, err
+		}
+		productResponses = append(productResponses, model.GetProductListResponse{
+			ProductID:       product.ProductID,
+			SellerID:        product.SellerID,
+			ProductName:     product.ProductName,
+			Description:     product.Description,
+			OriginalPrice:   product.Price,
+			DiscountedPrice: price,
+			Quantity:        product.Quantity,
+			CategoryID:      product.CategoryID,
+			ImageURL:        product.ImageURL,
+			CreatedAt:       product.CreatedAt.Format(tsCreateTimeLayout),
+			UpdatedAt:       product.UpdatedAt.Format(tsCreateTimeLayout),
+			IsDeleted:       product.IsDeleted,
 		})
 	}
 
-	list := &util.PaginatedList[model.GetProductResponse]{
+	list := &util.PaginatedList[model.GetProductListResponse]{
 		Items:      productResponses,
 		TotalCount: len(productResponses),
 		PageIndex:  req.Paging.PageIndex,
@@ -216,4 +231,113 @@ func (pu *productUsecase) GetProductList(ctx context.Context, req *model.GetProd
 
 	pu.log.Infof("Fetched %d products", len(productResponses))
 	return list, nil
+}
+
+func (pu *productUsecase) GetProductPriceAfterDiscount(ctx context.Context, req *model.GetProductPriceAfterDiscount) (float64, error) {
+	pu.log.Infof("Fetching product price after discount with product ID: %d", req.ProductID)
+
+	product, err := pu.productRepo.Get(ctx, req.ProductID)
+	if err != nil {
+		pu.log.Errorf("Error fetching product: %v", err)
+		return 0, err
+	}
+
+	productDiscountsRequest := &model.GetProductDiscountsRequest{
+		ProductID: &req.ProductID,
+	}
+
+	data, err := json.Marshal(productDiscountsRequest)
+	if err != nil {
+		pu.log.Errorf("Failed to marshal product discounts request: %v", err)
+		return 0, err
+	}
+
+	// Fetch the product discounts
+	url := constant.PRODUCT_DISCOUNT_SERVICE + "/"
+	client := &http.Client{}
+
+	request, err := http.NewRequest("GET", url, bytes.NewBuffer(data))
+	if err != nil {
+		return 0, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := client.Do(request)
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("product discount service returned non-OK status: %d", resp.StatusCode)
+	}
+
+	var productDiscounts []*model.ProductDiscount
+	if err := json.NewDecoder(resp.Body).Decode(&productDiscounts); err != nil {
+		return 0, fmt.Errorf("failed to decode product discounts response: %w", err)
+	}
+
+	var percentageDiscounts []float64
+	var fixedDiscounts []float64
+
+	for _, discount := range productDiscounts {
+		url := fmt.Sprintf("%s/%d", constant.DISCOUNT_SERVICE, discount.DiscountID)
+
+		request, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return 0, fmt.Errorf("failed to create discount request: %w", err)
+		}
+
+		resp, err := client.Do(request)
+		if err != nil {
+			return 0, fmt.Errorf("failed to execute discount request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return 0, fmt.Errorf("discount service returned non-OK status: %d", resp.StatusCode)
+		}
+
+		var discountEvent model.GetDiscountResponse
+		if err := json.NewDecoder(resp.Body).Decode(&discountEvent); err != nil {
+			return 0, fmt.Errorf("failed to decode discount response: %w", err)
+		}
+
+		startDate, err := time.Parse(tsCreateTimeLayout, discountEvent.StartDate)
+		if err != nil {
+			pu.log.Errorf("Error parsing start date: %v", err)
+			return 0, err
+		}
+
+		endDate, err := time.Parse(tsCreateTimeLayout, discountEvent.EndDate)
+		if err != nil {
+			pu.log.Errorf("Error parsing end date: %v", err)
+			return 0, err
+		}
+
+		if !discountEvent.IsDeleted && startDate.Before(time.Now()) && endDate.After(time.Now()) {
+			switch discountEvent.DiscountType {
+			case "Percentage":
+				percentageDiscounts = append(percentageDiscounts, discountEvent.DiscountValue)
+			case "Fixed":
+				fixedDiscounts = append(fixedDiscounts, discountEvent.DiscountValue)
+			}
+		}
+	}
+
+	// Apply percentage discounts
+	for _, discountValue := range percentageDiscounts {
+		product.Price -= product.Price * discountValue / 100
+	}
+
+	// Apply fixed discounts
+	for _, discountValue := range fixedDiscounts {
+		product.Price -= discountValue
+	}
+
+	if product.Price < 0 {
+		product.Price = fallbackPrice
+	}
+
+	pu.log.Infof("Fetched product price after discount: %f", product.Price)
+	return product.Price, nil
 }

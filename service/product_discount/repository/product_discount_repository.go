@@ -37,11 +37,11 @@ func (pr *productDiscountRepository) Create(ctx context.Context, productDiscount
 		pr.log.Errorf("Error creating productDiscount: %v", err)
 		return nil, err
 	}
-	cacheKey := fmt.Sprintf("productDiscount:%d - %d", productDiscount.ProductID, productDiscount.DiscountID)
+	cacheKey := fmt.Sprintf("productDiscount:%d:%d", productDiscount.ProductID, productDiscount.DiscountID)
 
 	productDiscountJSON, _ := json.Marshal(productDiscount)
 	pr.redis.Set(ctx, cacheKey, productDiscountJSON, 0)
-	pr.log.Infof("ProductDiscount saved to cache: %d - %d", productDiscount.ProductID, productDiscount.DiscountID)
+	pr.log.Infof("ProductDiscount saved to cache: %d:%d", productDiscount.ProductID, productDiscount.DiscountID)
 
 	// Invalidate the cache for all records
 	pr.redis.Del(ctx, "all_productDiscounts")
@@ -51,25 +51,30 @@ func (pr *productDiscountRepository) Create(ctx context.Context, productDiscount
 }
 
 func (pr *productDiscountRepository) Delete(ctx context.Context, productID, discountID int64) error {
-	pr.log.Infof("Deleting productDiscount with ID: %d and productID: %d", productID, discountID)
+	pr.log.Infof("Deleting productDiscount with productID: %d and discountID: %d", productID, discountID)
 	var req model.GetProductDiscountsRequest = model.GetProductDiscountsRequest{
 		ProductID:  &productID,
 		DiscountID: &discountID,
 	}
-	productDiscount, err := pr.Get(ctx, &req)
+	productDiscounts, err := pr.Get(ctx, &req)
 	if err != nil {
 		pr.log.Errorf("Error fetching productDiscount for deletion: %v", err)
 		return err
 	}
 
-	if err := pr.db.WithContext(ctx).Delete(productDiscount[0]).Error; err != nil {
+	if len(productDiscounts) == 0 {
+		pr.log.Warnf("No productDiscount found for productID: %d and discountID: %d", productID, discountID)
+		return nil
+	}
+
+	if err := pr.db.WithContext(ctx).Delete(productDiscounts[0]).Error; err != nil {
 		pr.log.Errorf("Error deleting productDiscount: %v", err)
 		return err
 	}
 
-	cacheKey := fmt.Sprintf("productDiscount:%d - %d", productID, discountID)
+	cacheKey := fmt.Sprintf("productDiscount:%d:%d", productID, discountID)
 	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("ProductDiscount deleted from cache: %d", productID)
+	pr.log.Infof("ProductDiscount deleted from cache: %d:%d", productID, discountID)
 
 	// Invalidate the cache for all records
 	pr.redis.Del(ctx, "all_productDiscounts")
@@ -123,6 +128,14 @@ func (pr *productDiscountRepository) Get(ctx context.Context, req *model.GetProd
 		db = db.Where("product_id = ? AND discount_id = ?", *req.ProductID, *req.DiscountID)
 	} else {
 		pr.log.Info("Fetching all product discounts")
+		cacheKey = "all_productDiscounts"
+		cachedData, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedData), &productDiscounts); err == nil {
+				pr.log.Info("Fetched all product discounts from cache")
+				return productDiscounts, nil
+			}
+		}
 	}
 
 	if err := db.Find(&productDiscounts).Error; err != nil {

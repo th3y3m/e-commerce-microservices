@@ -128,7 +128,7 @@ type Product struct {
 }
 
 type CartItem struct {
-	CartID    int64 `gorm:"primaryKey;column:cart_id;autoIncrement"`
+	CartID    int64 `gorm:"primaryKey;column:cart_id"`
 	ProductID int64 `gorm:"primaryKey;column:product_id"`
 	Quantity  int   `gorm:"column:quantity"`
 }

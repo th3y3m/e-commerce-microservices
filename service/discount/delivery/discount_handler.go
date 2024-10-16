@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"strconv"
 	"th3y3m/e-commerce-microservices/service/discount/dependency_injection"
 	"th3y3m/e-commerce-microservices/service/discount/model"
 
@@ -9,18 +10,20 @@ import (
 )
 
 func GetDiscountByID(c *gin.Context) {
+	id := c.Param("discount_id")
+
 	module := dependency_injection.NewDiscountUsecaseProvider()
 
 	var req model.GetDiscountRequest
-
-	err := c.BindJSON(&req)
+	discountID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		logrus.Error(err)
 		c.JSON(400, gin.H{
-			"error": "Bad Request",
+			"error": "Invalid discount ID",
 		})
 		return
 	}
+	req.DiscountID = discountID
 
 	discount, err := module.GetDiscount(c, &req)
 	if err != nil {

@@ -7,9 +7,10 @@ import (
 func RegisterHandlers() *gin.Engine {
 	r := gin.Default()
 
-	mail := r.Group("/api/mail")
+	vnpay := r.Group("/api/vnpay")
 	{
-		mail.POST("/", SendMail)
+		vnpay.POST("/", CreateVnPayUrl)
+		vnpay.GET("/validate", ValidateVnPayResponse)
 	}
 
 	return r
