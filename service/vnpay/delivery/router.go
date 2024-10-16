@@ -9,7 +9,7 @@ func RegisterHandlers() *gin.Engine {
 
 	vnpay := r.Group("/api/vnpay")
 	{
-		vnpay.POST("/", CreateVnPayUrl)
+		vnpay.POST("", CreateVnPayUrl)
 		vnpay.GET("/validate", ValidateVnPayResponse)
 	}
 

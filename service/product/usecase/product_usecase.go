@@ -253,7 +253,7 @@ func (pu *productUsecase) GetProductPriceAfterDiscount(ctx context.Context, req 
 	}
 
 	// Fetch the product discounts
-	url := constant.PRODUCT_DISCOUNT_SERVICE + "/"
+	url := constant.PRODUCT_DISCOUNT_SERVICE
 	client := &http.Client{}
 
 	request, err := http.NewRequest("GET", url, bytes.NewBuffer(data))
@@ -268,6 +268,10 @@ func (pu *productUsecase) GetProductPriceAfterDiscount(ctx context.Context, req 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusNotFound {
+			pu.log.Infof("No discounts found for product with ID: %d", req.ProductID)
+			return product.Price, nil
+		}
 		return 0, fmt.Errorf("product discount service returned non-OK status: %d", resp.StatusCode)
 	}
 

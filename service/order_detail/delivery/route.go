@@ -9,11 +9,11 @@ func RegisterHandlers() *gin.Engine {
 
 	orderDetail := r.Group("/api/orderDetails")
 	{
-		orderDetail.GET("/:orderDetail_id", GetOrderDetailByID)
-		orderDetail.GET("/", GetPaginatedOrderDetail)
-		orderDetail.POST("/", CreateOrderDetail)
-		orderDetail.PUT("/", UpdateOrderDetail)
-		orderDetail.DELETE("/", DeleteOrderDetail)
+		orderDetail.GET("/GetOrderDetailByID", GetOrderDetailByID)
+		orderDetail.GET("", GetOrderDetails)
+		orderDetail.POST("", CreateOrderDetail)
+		orderDetail.PUT("", UpdateOrderDetail)
+		orderDetail.DELETE("", DeleteOrderDetail)
 	}
 
 	return r

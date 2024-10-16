@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"th3y3m/e-commerce-microservices/pkg/constant"
 	"th3y3m/e-commerce-microservices/service/product_discount/model"
 	"th3y3m/e-commerce-microservices/service/product_discount/repository"
 
@@ -74,6 +75,10 @@ func (pu *productDiscountUsecase) GetProductDiscountList(ctx context.Context, re
 
 	productDiscounts, err := pu.productDiscountRepo.Get(ctx, req)
 	if err != nil {
+		if err == constant.ErrNoProductDiscountsFound {
+			pu.log.Infof("No product discounts found for request: %+v", req)
+			return nil, err
+		}
 		pu.log.Errorf("Error fetching productDiscount list: %v", err)
 		return nil, err
 	}

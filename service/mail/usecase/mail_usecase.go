@@ -85,7 +85,9 @@ func (m *mailUsecase) SendOrderDetails(Customer model.User, Order model.Order, O
 	var orderDetailsWithProduct []OrderDetailWithProduct
 	for _, od := range OrderDetails {
 		// Fetch the product details from the product service
-		res, err := http.Get(constant.PRODUCT_SERVICE + strconv.FormatInt(od.ProductID, 10))
+		url := constant.PRODUCT_SERVICE + "/" + strconv.FormatInt(od.ProductID, 10)
+
+		res, err := http.Get(url)
 		if err != nil {
 			log.Printf("Failed to get product details for product ID %d: %v", od.ProductID, err)
 			return err

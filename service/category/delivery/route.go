@@ -10,9 +10,9 @@ func RegisterHandlers() *gin.Engine {
 	category := r.Group("/api/categories")
 	{
 		category.GET("/:category_id", GetCategoryByID)
-		category.POST("/", CreateCategory)
-		category.PUT("/", UpdateCategory)
-		category.DELETE("/", DeleteCategory)
+		category.POST("", CreateCategory)
+		category.PUT("", UpdateCategory)
+		category.DELETE("", DeleteCategory)
 	}
 
 	return r

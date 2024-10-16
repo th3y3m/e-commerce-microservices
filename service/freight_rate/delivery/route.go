@@ -10,9 +10,9 @@ func RegisterHandlers() *gin.Engine {
 	freightRate := r.Group("/api/freightRates")
 	{
 		freightRate.GET("/:freightRate_id", GetFreightRateByID)
-		freightRate.POST("/", CreateFreightRate)
-		freightRate.PUT("/", UpdateFreightRate)
-		freightRate.DELETE("/", DeleteFreightRate)
+		freightRate.POST("", CreateFreightRate)
+		freightRate.PUT("", UpdateFreightRate)
+		freightRate.DELETE("", DeleteFreightRate)
 	}
 
 	return r

@@ -10,10 +10,10 @@ func RegisterHandlers() *gin.Engine {
 	voucher := r.Group("/api/vouchers")
 	{
 		voucher.GET("/:voucher_id", GetVoucherByID)
-		voucher.GET("/", GetPaginatedVoucher)
-		voucher.POST("/", CreateVoucher)
-		voucher.PUT("/", UpdateVoucher)
-		voucher.DELETE("/", DeleteVoucher)
+		voucher.GET("", GetPaginatedVoucher)
+		voucher.POST("", CreateVoucher)
+		voucher.PUT("", UpdateVoucher)
+		voucher.DELETE("", DeleteVoucher)
 	}
 
 	return r

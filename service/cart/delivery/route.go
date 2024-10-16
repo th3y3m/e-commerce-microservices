@@ -10,9 +10,9 @@ func RegisterHandlers() *gin.Engine {
 	cart := r.Group("/api/carts")
 	{
 		cart.GET("/:cart_id", GetCartByID)
-		cart.POST("/", CreateCart)
-		cart.PUT("/", UpdateCart)
-		cart.DELETE("/", DeleteCart)
+		cart.POST("", CreateCart)
+		cart.PUT("", UpdateCart)
+		cart.DELETE("", DeleteCart)
 	}
 
 	return r

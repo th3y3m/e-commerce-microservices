@@ -5,6 +5,86 @@ import (
 	"time"
 )
 
+type GetOrderDetailsRequest struct {
+	OrderID   *int64 `json:"order_id"`
+	ProductID *int64 `json:"product_id"`
+}
+type GetUserResponse struct {
+	UserID       int64  `json:"user_id"`
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+	FullName     string `json:"full_name"`
+	PhoneNumber  string `json:"phone_number"`
+	Address      string `json:"address"`
+	Role         string `json:"role"`
+	ImageURL     string `json:"image_url"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+	Token        string `json:"token"`
+	TokenExpires string `json:"token_expires"`
+	IsDeleted    bool   `json:"is_deleted"`
+}
+type GetUserRequest struct {
+	UserID *int64 `json:"user_id"`
+	Email  string `json:"email"`
+}
+type UpdateProductRequest struct {
+	ProductID   int64   `json:"product_id"`
+	SellerID    int64   `json:"seller_id"`
+	ProductName string  `json:"product_name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	Quantity    int     `json:"quantity"`
+	CategoryID  int64   `json:"category_id"`
+	ImageURL    string  `json:"image_url"`
+}
+type CreatePaymentRequest struct {
+	OrderID          int64   `json:"order_id"`
+	PaymentAmount    float64 `json:"payment_amount"`
+	PaymentMethod    string  `json:"payment_method"`
+	PaymentStatus    string  `json:"payment_status"`
+	PaymentSignature string  `json:"payment_signature"`
+}
+type GetOrderDetailResponse struct {
+	OrderID   int64   `json:"order_id"`
+	ProductID int64   `json:"product_id"`
+	Quantity  int     `json:"quantity"`
+	UnitPrice float64 `json:"unit_price"`
+}
+type CreateOrderDetailRequest struct {
+	OrderID   int64   `json:"order_id"`
+	ProductID int64   `json:"product_id"`
+	Quantity  int     `json:"quantity"`
+	UnitPrice float64 `json:"unit_price"`
+}
+
+type GetProductResponse struct {
+	ProductID   int64   `json:"product_id"`
+	SellerID    int64   `json:"seller_id"`
+	ProductName string  `json:"product_name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	Quantity    int     `json:"quantity"`
+	CategoryID  int64   `json:"category_id"`
+	ImageURL    string  `json:"image_url"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+	IsDeleted   bool    `json:"is_deleted"`
+}
+type GetProductRequest struct {
+	ProductID int64 `json:"product_id"`
+}
+type GetCartItemsRequest struct {
+	CartID    *int64 `json:"cart_id"`
+	ProductID *int64 `json:"product_id"`
+}
+
+type GetCartItemResponse struct {
+	CartID    int64 `json:"cart_id"`
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
+}
+
 type GetOrderRequest struct {
 	OrderID int64 `json:"order_id"`
 }

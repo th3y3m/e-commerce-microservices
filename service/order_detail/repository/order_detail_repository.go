@@ -42,13 +42,13 @@ func (pr *orderDetailRepository) Get(ctx context.Context, orderID, productID int
 	cachedOrderDetail, err := pr.redis.Get(ctx, cacheKey).Result()
 	if err == nil {
 		if err := json.Unmarshal([]byte(cachedOrderDetail), &orderDetail); err == nil {
-			pr.log.Infof("OrderDetail found in cache: %d", orderID)
+			pr.log.Infof("OrderDetail found in cache: %d:%d", orderID, productID)
 			return &orderDetail, nil
 		}
 	}
 
 	// If not found in cache, get from database
-	if err := pr.db.WithContext(ctx).First(&orderDetail, orderID, productID).Error; err != nil {
+	if err := pr.db.WithContext(ctx).Where("order_id = ? AND product_id = ?", orderID, productID).First(&orderDetail).Error; err != nil {
 		pr.log.Errorf("Error fetching orderDetail from database: %v", err)
 		return nil, err
 	}

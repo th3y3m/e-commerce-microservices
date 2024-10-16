@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"th3y3m/e-commerce-microservices/pkg/constant"
 	"th3y3m/e-commerce-microservices/service/product_discount/model"
 
 	"github.com/redis/go-redis/v9"
@@ -143,11 +144,14 @@ func (pr *productDiscountRepository) Get(ctx context.Context, req *model.GetProd
 		return nil, err
 	}
 
-	if len(productDiscounts) > 0 {
-		productDiscountsJSON, _ := json.Marshal(productDiscounts)
-		pr.redis.Set(ctx, cacheKey, productDiscountsJSON, 0) // Optionally, set an expiry time
-		pr.log.Infof("Product discounts saved to cache: %s", cacheKey)
+	if len(productDiscounts) == 0 {
+		pr.log.Infof("No product discounts found for request: %+v", req)
+		return nil, constant.ErrNoProductDiscountsFound
 	}
+
+	productDiscountsJSON, _ := json.Marshal(productDiscounts)
+	pr.redis.Set(ctx, cacheKey, productDiscountsJSON, 0) // Optionally, set an expiry time
+	pr.log.Infof("Product discounts saved to cache: %s", cacheKey)
 
 	pr.log.Infof("Fetched %d product discounts", len(productDiscounts))
 	return productDiscounts, nil

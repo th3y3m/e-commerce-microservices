@@ -10,9 +10,9 @@ func RegisterHandlers() *gin.Engine {
 	payment := r.Group("/api/payments")
 	{
 		payment.GET("/:payment_id", GetPaymentByID)
-		payment.GET("/", GetPaginatedPayment)
-		payment.POST("/", CreatePayment)
-		payment.PUT("/", UpdatePayment)
+		payment.GET("", GetPaginatedPayment)
+		payment.POST("", CreatePayment)
+		payment.PUT("", UpdatePayment)
 	}
 
 	return r

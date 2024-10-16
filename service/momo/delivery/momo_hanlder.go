@@ -9,7 +9,7 @@ import (
 )
 
 func CreateMoMoUrl(c *gin.Context) {
-	MoMoConfig := dependency_injection.NewMoMoUsecaseProvider()
+	module := dependency_injection.NewMoMoUsecaseProvider()
 
 	amountStr := c.Query("amount")
 	amount, err := strconv.ParseFloat(amountStr, 64)
@@ -24,7 +24,7 @@ func CreateMoMoUrl(c *gin.Context) {
 		return
 	}
 
-	paymentUrl, err := MoMoConfig.CreateMoMoUrl(amount, orderID)
+	paymentUrl, err := module.CreateMoMoUrl(amount, orderID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -33,10 +33,10 @@ func CreateMoMoUrl(c *gin.Context) {
 }
 
 func ValidateMoMoResponse(c *gin.Context) {
-	MoMoConfig := dependency_injection.NewMoMoUsecaseProvider()
+	module := dependency_injection.NewMoMoUsecaseProvider()
 
 	queryParams := c.Request.URL.Query()
-	res, err := MoMoConfig.ValidateMoMoResponse(queryParams)
+	res, err := module.ValidateMoMoResponse(queryParams)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

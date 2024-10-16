@@ -1,5 +1,7 @@
 package constant
 
+import "errors"
+
 const API_GATEWAY = "http://localhost:8000"
 
 const OAUTH_SERVICE = "http://localhost:8080/auth"
@@ -25,3 +27,17 @@ const AUTH_SERVICE = "http://localhost:8099/api/authentication"
 
 const PAYMENT_RESPONSE_REJECT_URL = "http://localhost:3000/reject"
 const PAYMENT_RESPONSE_CONFIRM_URL = "http://localhost:3000/confirm"
+
+const PAYMENT_STATUS_PENDING = "Pending"
+const PAYMENT_STATUS_COMPLETED = "Complete"
+const PAYMENT_STATUS_FAILED = "Failed"
+
+const ORDER_STATUS_PENDING = "Pending"
+const ORDER_STATUS_COMPLETED = "Complete"
+const ORDER_STATUS_FAILED = "Failed"
+const ORDER_STATUS_CANCELED = "Canceled"
+
+const PAYMENT_METHOD_MOMO = "MoMo"
+const PAYMENT_METHOD_VNPAY = "VnPay"
+
+var ErrNoProductDiscountsFound = errors.New("no product discounts found")

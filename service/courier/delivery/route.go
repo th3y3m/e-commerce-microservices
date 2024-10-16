@@ -10,9 +10,9 @@ func RegisterHandlers() *gin.Engine {
 	courier := r.Group("/api/couriers")
 	{
 		courier.GET("/:courier_id", GetCourierByID)
-		courier.POST("/", CreateCourier)
-		courier.PUT("/", UpdateCourier)
-		courier.DELETE("/", DeleteCourier)
+		courier.POST("", CreateCourier)
+		courier.PUT("", UpdateCourier)
+		courier.DELETE("", DeleteCourier)
 	}
 
 	return r

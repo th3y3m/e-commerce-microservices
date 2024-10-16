@@ -10,9 +10,9 @@ func RegisterHandlers() *gin.Engine {
 	discount := r.Group("/api/discounts")
 	{
 		discount.GET("/:discount_id", GetDiscountByID)
-		discount.POST("/", CreateDiscount)
-		discount.PUT("/", UpdateDiscount)
-		discount.DELETE("/", DeleteDiscount)
+		discount.POST("", CreateDiscount)
+		discount.PUT("", UpdateDiscount)
+		discount.DELETE("", DeleteDiscount)
 	}
 
 	return r

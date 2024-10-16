@@ -54,11 +54,12 @@ type MoMoService struct {
 func (s *MoMoService) CreateMoMoUrl(amount float64, orderId string) (string, error) {
 	requestId := uuid.New().String()
 	orderInfo := "Customer"
-	formattedAmount := int64(amount * 1000) // Convert to VND
+	formattedAmount := int64(amount) // Convert to VND
+	orderID := "ORDER" + orderId
 
 	// Create raw signature string
 	rawHash := fmt.Sprintf("accessKey=%s&amount=%d&extraData=%s&ipnUrl=%s&orderId=%s&orderInfo=%s&partnerCode=%s&redirectUrl=%s&requestId=%s&requestType=%s",
-		s.accessKey, formattedAmount, s.extraData, s.notifyUrl, orderId, orderInfo, s.partnerCode, s.returnUrl, requestId, s.requestType)
+		s.accessKey, formattedAmount, s.extraData, s.notifyUrl, orderID, orderInfo, s.partnerCode, s.returnUrl, requestId, s.requestType)
 	signature := util.HmacSHA256(s.secretKey, rawHash)
 
 	// Build request payload
@@ -68,7 +69,7 @@ func (s *MoMoService) CreateMoMoUrl(amount float64, orderId string) (string, err
 		"storeId":     "MoMoStore",
 		"requestId":   requestId,
 		"amount":      strconv.FormatInt(formattedAmount, 10),
-		"orderId":     orderId,
+		"orderId":     orderID,
 		"orderInfo":   orderInfo,
 		"redirectUrl": s.returnUrl,
 		"ipnUrl":      s.notifyUrl,
@@ -123,7 +124,7 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 		return nil, fmt.Errorf("error decoding order response: %v", err)
 	}
 
-	if order.OrderID == 0 || order.OrderStatus == "Complete" {
+	if order.OrderID == 0 || order.OrderStatus == constant.ORDER_STATUS_COMPLETED {
 		return &model.PaymentResponse{
 			IsSuccessful: false,
 			RedirectUrl:  constant.PAYMENT_RESPONSE_REJECT_URL,
@@ -131,7 +132,7 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 	}
 
 	if resultCode == "0" {
-		order.OrderStatus = "Complete"
+		order.OrderStatus = constant.ORDER_STATUS_COMPLETED
 		updateModel := model.UpdateOrderRequest{
 			OrderID:               order.OrderID,
 			CustomerID:            order.CustomerID,
@@ -183,9 +184,9 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 		paymentCreateModel := &model.CreatePaymentRequest{
 			OrderID:          order.OrderID,
 			PaymentAmount:    paymentAmount,
-			PaymentStatus:    "Complete",
+			PaymentStatus:    constant.PAYMENT_STATUS_COMPLETED,
 			PaymentSignature: signature,
-			PaymentMethod:    "MoMo",
+			PaymentMethod:    constant.PAYMENT_METHOD_MOMO,
 		}
 
 		url = constant.PAYMENT_SERVICE
@@ -222,7 +223,7 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 	}
 
 	// Handle payment failure
-	order.OrderStatus = "Cancelled"
+	order.OrderStatus = constant.ORDER_STATUS_FAILED
 	updateModel := model.UpdateOrderRequest{
 		OrderID:               order.OrderID,
 		CustomerID:            order.CustomerID,

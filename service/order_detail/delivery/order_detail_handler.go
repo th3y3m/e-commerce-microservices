@@ -110,7 +110,7 @@ func DeleteOrderDetail(c *gin.Context) {
 	})
 }
 
-func GetPaginatedOrderDetail(c *gin.Context) {
+func GetOrderDetails(c *gin.Context) {
 	module := dependency_injection.NewOrderDetailUsecaseProvider()
 
 	var req model.GetOrderDetailsRequest

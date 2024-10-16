@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"th3y3m/e-commerce-microservices/pkg/constant"
 	"th3y3m/e-commerce-microservices/service/product_discount/dependency_injection"
 	"th3y3m/e-commerce-microservices/service/product_discount/model"
 
@@ -75,6 +76,13 @@ func GetProductDiscountList(c *gin.Context) {
 
 	productDiscounts, err := module.GetProductDiscountList(c, &req)
 	if err != nil {
+		if err == constant.ErrNoProductDiscountsFound {
+			logrus.Infof("No product discounts found for request: %+v", req)
+			c.JSON(404, gin.H{
+				"error": "Not Found",
+			})
+			return
+		}
 		logrus.Error(err)
 		c.JSON(500, gin.H{
 			"error": "Internal Server Error",

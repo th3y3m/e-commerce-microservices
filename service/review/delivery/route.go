@@ -10,10 +10,10 @@ func RegisterHandlers() *gin.Engine {
 	review := r.Group("/api/reviews")
 	{
 		review.GET("/:review_id", GetReviewByID)
-		review.GET("/", GetPaginatedReview)
-		review.POST("/", CreateReview)
-		review.PUT("/:review_id", UpdateReview)
-		review.DELETE("/:review_id", DeleteReview)
+		review.GET("", GetPaginatedReview)
+		review.POST("", CreateReview)
+		review.PUT("", UpdateReview)
+		review.DELETE("", DeleteReview)
 	}
 
 	return r

@@ -10,10 +10,10 @@ func RegisterHandlers() *gin.Engine {
 	product := r.Group("/api/products")
 	{
 		product.GET("/:product_id", GetProductByID)
-		product.GET("/", GetPaginatedProduct)
-		product.POST("/", CreateProduct)
-		product.PUT("/", UpdateProduct)
-		product.DELETE("/", DeleteProduct)
+		product.GET("", GetPaginatedProduct)
+		product.POST("", CreateProduct)
+		product.PUT("", UpdateProduct)
+		product.DELETE("", DeleteProduct)
 	}
 
 	return r

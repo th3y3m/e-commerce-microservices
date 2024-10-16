@@ -10,10 +10,10 @@ func RegisterHandlers() *gin.Engine {
 	order := r.Group("/api/orders")
 	{
 		order.GET("/:order_id", GetOrderByID)
-		order.GET("/", GetPaginatedOrder)
-		order.POST("/", CreateOrder)
-		order.PUT("/", UpdateOrder)
-		order.DELETE("/", DeleteOrder)
+		order.GET("", GetPaginatedOrder)
+		order.POST("", CreateOrder)
+		order.PUT("", UpdateOrder)
+		order.DELETE("", DeleteOrder)
 	}
 
 	return r

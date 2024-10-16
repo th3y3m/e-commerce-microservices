@@ -9,7 +9,7 @@ func RegisterHandlers() *gin.Engine {
 
 	momo := r.Group("/api/momo")
 	{
-		momo.POST("/", CreateMoMoUrl)
+		momo.POST("", CreateMoMoUrl)
 		momo.GET("/validate", ValidateMoMoResponse)
 	}
 

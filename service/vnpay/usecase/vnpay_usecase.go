@@ -21,8 +21,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-var TimeZoneAsiaHoChiMinh, _ = time.LoadLocation("Asia/Ho_Chi_Minh")
-
 func NewVnpayUsecase(log *logrus.Logger) IVnpayUsecase {
 
 	return &VnpayUsecase{
@@ -47,7 +45,7 @@ type VnpayUsecase struct {
 	log        *logrus.Logger
 }
 
-func (s *VnpayUsecase) CreateVNPayUrl(amount float64, orderinfor string) (string, error) {
+func (s *VnpayUsecase) CreateVNPayUrl(amount float64, orderID string) (string, error) {
 	hostName, err := os.Hostname()
 	if err != nil {
 		return "", err
@@ -60,7 +58,7 @@ func (s *VnpayUsecase) CreateVNPayUrl(amount float64, orderinfor string) (string
 	clientIPAddress := ipAddrs[0].String()
 
 	pay := util.NewPayLib()
-	vnpAmount := amount * 100000
+	vnpAmount := amount
 	pay.AddRequestData("vnp_Version", "2.1.0")
 	pay.AddRequestData("vnp_Command", "pay")
 	pay.AddRequestData("vnp_TmnCode", s.tmnCode)
@@ -73,7 +71,7 @@ func (s *VnpayUsecase) CreateVNPayUrl(amount float64, orderinfor string) (string
 	pay.AddRequestData("vnp_OrderInfo", "Customer")
 	pay.AddRequestData("vnp_OrderType", "other")
 	pay.AddRequestData("vnp_ReturnUrl", s.returnUrl)
-	pay.AddRequestData("vnp_TxnRef", orderinfor)
+	pay.AddRequestData("vnp_TxnRef", orderID)
 
 	TransactionUrl := pay.CreateRequestUrl(s.url, s.hashSecret)
 	return TransactionUrl, nil
@@ -112,7 +110,7 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 		return nil, fmt.Errorf("error decoding order response: %v", err)
 	}
 
-	if order.OrderStatus == "Complete" {
+	if order.OrderStatus == constant.ORDER_STATUS_COMPLETED {
 		return &model.PaymentResponse{
 			IsSuccessful: false,
 			RedirectUrl:  "LINK_INVALID",
@@ -121,7 +119,7 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 
 	vnpResponseCode := queryString.Get("vnp_ResponseCode")
 	if vnpResponseCode == "00" && queryString.Get("vnp_TransactionStatus") == "00" {
-		order.OrderStatus = "Complete"
+		order.OrderStatus = constant.ORDER_STATUS_COMPLETED
 		updateModel := model.UpdateOrderRequest{
 			OrderID:               order.OrderID,
 			CustomerID:            order.CustomerID,
@@ -173,9 +171,9 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 		paymentCreateModel := &model.CreatePaymentRequest{
 			OrderID:          order.OrderID,
 			PaymentAmount:    paymentAmount,
-			PaymentStatus:    "Complete",
+			PaymentStatus:    constant.ORDER_STATUS_COMPLETED,
 			PaymentSignature: queryString.Get("vnp_BankTranNo"),
-			PaymentMethod:    "MoMo",
+			PaymentMethod:    constant.PAYMENT_METHOD_VNPAY,
 		}
 
 		url = constant.PAYMENT_SERVICE
@@ -216,11 +214,11 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 
 		return &model.PaymentResponse{
 			IsSuccessful: true,
-			RedirectUrl:  fmt.Sprintf("https://localhost:3000/confirm?orderId=%s", order.OrderID),
+			RedirectUrl:  constant.PAYMENT_RESPONSE_CONFIRM_URL + "?orderId=" + strconv.FormatInt(order.OrderID, 10),
 		}, nil
 	}
 
-	order.OrderStatus = "Cancelled"
+	order.OrderStatus = constant.ORDER_STATUS_FAILED
 	updateModel := model.UpdateOrderRequest{
 		OrderID:               order.OrderID,
 		CustomerID:            order.CustomerID,
@@ -265,7 +263,7 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 
 	return &model.PaymentResponse{
 		IsSuccessful: false,
-		RedirectUrl:  fmt.Sprintf("https://localhost:3000/reject?orderId=%s", queryString.Get("vnp_TxnRef")),
+		RedirectUrl:  constant.PAYMENT_RESPONSE_REJECT_URL + "?orderId=" + queryString.Get("vnp_TxnRef"),
 	}, nil
 }
 
