@@ -10,6 +10,7 @@ import (
 	"th3y3m/e-commerce-microservices/pkg/constant"
 	"th3y3m/e-commerce-microservices/pkg/util"
 	"th3y3m/e-commerce-microservices/service/order/model"
+	"th3y3m/e-commerce-microservices/service/order/rabbitmq"
 	"th3y3m/e-commerce-microservices/service/order/repository"
 	"time"
 
@@ -31,9 +32,7 @@ type IOrderUsecase interface {
 	DeleteOrder(ctx context.Context, req *model.DeleteOrderRequest) error
 	GetOrderList(ctx context.Context, req *model.GetOrdersRequest) (*util.PaginatedList[model.GetOrderResponse], error)
 	ProcessOrder(ctx context.Context, userId, cartId, CourierID, VoucherID int64, shipAddress, paymentMethod string, freight float64) (*model.GetOrderResponse, error)
-	ProcessPayment(ctx context.Context, order repository.Order, paymentMethod string) (string, error)
-	UpdateInventory(ctx context.Context, userId, cartId int64) error
-	SendNotification(ctx context.Context, orderID int64) error
+	ProcessPayment(ctx context.Context, order *model.GetOrderResponse, paymentMethod string) (string, error)
 }
 
 func NewOrderUsecase(orderRepo repository.IOrderRepository, log *logrus.Logger) IOrderUsecase {
@@ -250,139 +249,135 @@ func (pu *orderUsecase) GetOrderList(ctx context.Context, req *model.GetOrdersRe
 	return list, nil
 }
 
-// func (o *orderUsecase) PlaceOrder(userId, cartId, shipAddress, CourierID, VoucherID, paymentMethod string) (string, error) {
-// 	// Step 1: Create the order synchronously
-// 	order, err := o.ProcessOrder(userId, cartId, shipAddress, CourierID, VoucherID, paymentMethod)
-// 	if err != nil {
-// 		return "", err
-// 	}
+func (o *orderUsecase) PlaceOrder(ctx context.Context, userId, cartId, CourierID, VoucherID int64, paymentMethod, shipAddress string, freight float64) (string, error) {
 
-// 	err = o.PublishInventoryUpdateEvent(userId, cartId)
-// 	if err != nil {
-// 		return "", err
-// 	}
+	order, err := o.ProcessOrder(ctx, userId, cartId, CourierID, VoucherID, shipAddress, paymentMethod, freight)
+	if err != nil {
+		return "", err
+	}
+	paymentURL, err := o.ProcessPayment(ctx, order, paymentMethod)
+	if err != nil {
+		return "", err
+	}
 
-// 	// Publish Notification Event
-// 	err = o.PublishOrderNotificationEvent(order.OrderID)
-// 	if err != nil {
-// 		return "", err
-// 	}
+	err = rabbitmq.PublishInventoryUpdateEvent(userId, cartId)
+	if err != nil {
+		return "", err
+	}
 
-// 	paymentURL, err := o.ProcessPayment(order)
-// 	if err != nil {
-// 		return "", err
-// 	}
+	// Publish Notification Event
+	err = rabbitmq.PublishOrderNotificationEvent(order.OrderID, paymentURL)
+	if err != nil {
+		return "", err
+	}
 
-// 	return paymentURL, nil
-// }
+	return paymentURL, nil
+}
 
 func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, CourierID, VoucherID int64, shipAddress, paymentMethod string, freight float64) (*model.GetOrderResponse, error) {
+	client := &http.Client{}
 
+	// Fetch cart items
 	cartItemReq := model.GetCartItemsRequest{
 		CartID: &cartId,
 	}
 	cartItemData, err := json.Marshal(cartItemReq)
 	if err != nil {
-		o.log.Errorf("Failed to marshal order data: %v", err)
+		o.log.Errorf("Failed to marshal cart item request: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 
 	url := constant.CART_ITEM_SERVICE
 	req, err := http.NewRequest("GET", url, bytes.NewBuffer(cartItemData))
 	if err != nil {
-		o.log.Errorf("Failed to create request: %v", err)
+		o.log.Errorf("Failed to create cart item request: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 
-	// Set the context and execute the request
-	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		o.log.Errorf("Failed to execute request: %v", err)
+		o.log.Errorf("Failed to execute cart item request: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 	defer resp.Body.Close()
 
-	// Check if the request was successful
 	if resp.StatusCode != http.StatusOK {
-		o.log.Errorf("cart item service returned non-OK status: %d", resp.StatusCode)
+		o.log.Errorf("Cart item service returned non-OK status: %d", resp.StatusCode)
 		return &model.GetOrderResponse{}, fmt.Errorf("cart item service returned non-OK status: %d", resp.StatusCode)
 	}
 
-	// Decode the response into cart items
 	var productsList []model.GetCartItemResponse
 	err = json.NewDecoder(resp.Body).Decode(&productsList)
 	if err != nil {
-		o.log.Errorf("Failed to decode response: %v", err)
+		o.log.Errorf("Failed to decode cart item response: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 
+	// Fetch product details and calculate total amount
 	totalAmount := 0.0
+	productDetails := make(map[int64]model.GetProductResponse)
 	for _, product := range productsList {
+		if _, exists := productDetails[product.ProductID]; !exists {
+			url := constant.PRODUCT_SERVICE + fmt.Sprintf("/%d", product.ProductID)
+			req, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				o.log.Errorf("Failed to create product request: %v", err)
+				return &model.GetOrderResponse{}, err
+			}
 
-		url := constant.PRODUCT_SERVICE + fmt.Sprintf("/%d", product.ProductID)
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			o.log.Errorf("Failed to create request: %v", err)
-			return &model.GetOrderResponse{}, err
+			resp, err := client.Do(req)
+			if err != nil {
+				o.log.Errorf("Failed to execute product request: %v", err)
+				return &model.GetOrderResponse{}, err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				o.log.Errorf("Product service returned non-OK status: %d", resp.StatusCode)
+				return &model.GetOrderResponse{}, fmt.Errorf("product service returned non-OK status: %d", resp.StatusCode)
+			}
+
+			var p model.GetProductResponse
+			err = json.NewDecoder(resp.Body).Decode(&p)
+			if err != nil {
+				o.log.Errorf("Failed to decode product response: %v", err)
+				return &model.GetOrderResponse{}, err
+			}
+
+			productDetails[product.ProductID] = p
 		}
 
-		// Set the context and execute the request
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			o.log.Errorf("Failed to execute request: %v", err)
-			return &model.GetOrderResponse{}, err
-		}
-		defer resp.Body.Close()
-
-		// Check if the request was successful
-		if resp.StatusCode != http.StatusOK {
-			o.log.Errorf("product service returned non-OK status: %d", resp.StatusCode)
-			return &model.GetOrderResponse{}, fmt.Errorf("product service returned non-OK status: %d", resp.StatusCode)
-		}
-
-		// Decode the response into cart items
-		var p model.GetProductResponse
-		err = json.NewDecoder(resp.Body).Decode(&p)
-		if err != nil {
-			o.log.Errorf("Failed to decode response: %v", err)
-			return &model.GetOrderResponse{}, err
-		}
-
-		totalAmount += p.Price * float64(product.Quantity)
+		totalAmount += productDetails[product.ProductID].Price * float64(product.Quantity)
 	}
 
+	// Fetch voucher details
 	url = constant.VOUCHER_SERVICE + fmt.Sprintf("/%d", VoucherID)
 	req, err = http.NewRequest("GET", url, nil)
 	if err != nil {
-		o.log.Errorf("Failed to create request: %v", err)
+		o.log.Errorf("Failed to create voucher request: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 
-	// Set the context and execute the request
-	client = &http.Client{}
 	resp, err = client.Do(req)
 	if err != nil {
-		o.log.Errorf("Failed to execute request: %v", err)
+		o.log.Errorf("Failed to execute voucher request: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 	defer resp.Body.Close()
 
-	// Check if the request was successful
 	if resp.StatusCode != http.StatusOK {
-		o.log.Errorf("voucher service returned non-OK status: %d", resp.StatusCode)
+		o.log.Errorf("Voucher service returned non-OK status: %d", resp.StatusCode)
 		return &model.GetOrderResponse{}, fmt.Errorf("voucher service returned non-OK status: %d", resp.StatusCode)
 	}
 
-	// Decode the response into cart items
 	var voucher model.GetVoucherResponse
 	err = json.NewDecoder(resp.Body).Decode(&voucher)
 	if err != nil {
-		o.log.Errorf("Failed to decode response: %v", err)
+		o.log.Errorf("Failed to decode voucher response: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 
+	// Check voucher usage
 	checkVoucherUsageRequest := model.CheckVoucherUsageRequest{
 		VoucherID: VoucherID,
 		Order: model.Order{
@@ -405,58 +400,53 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 
 	checkVoucherUsageRequestData, err := json.Marshal(checkVoucherUsageRequest)
 	if err != nil {
-		o.log.Errorf("Failed to marshal order data: %v", err)
+		o.log.Errorf("Failed to marshal check voucher usage request: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 
 	url = constant.VOUCHER_SERVICE + "/check-usage"
 	req, err = http.NewRequest("POST", url, bytes.NewBuffer(checkVoucherUsageRequestData))
 	if err != nil {
-		o.log.Errorf("Failed to create request: %v", err)
+		o.log.Errorf("Failed to create check voucher usage request: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 
-	// Set the context and execute the request
-	client = &http.Client{}
 	resp, err = client.Do(req)
 	if err != nil {
-		o.log.Errorf("Failed to execute request: %v", err)
+		o.log.Errorf("Failed to execute check voucher usage request: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 	defer resp.Body.Close()
 
-	// Check if the request was successful
 	if resp.StatusCode != http.StatusOK {
-		o.log.Errorf("voucher service returned non-OK status: %d", resp.StatusCode)
+		o.log.Errorf("Voucher service returned non-OK status: %d", resp.StatusCode)
 		return &model.GetOrderResponse{}, fmt.Errorf("voucher service returned non-OK status: %d", resp.StatusCode)
 	}
 
 	var checkVoucherResponse model.CheckVoucherUsageResponse
-
-	// Decode the response body into the struct
 	err = json.NewDecoder(resp.Body).Decode(&checkVoucherResponse)
 	if err != nil {
-		o.log.Errorf("Failed to decode response: %v", err)
+		o.log.Errorf("Failed to decode check voucher usage response: %v", err)
 		return &model.GetOrderResponse{}, err
 	}
 
-	// Log the result and return the valid status
 	o.log.Infof("Voucher validity: %v", checkVoucherResponse.Valid)
-
 	if !checkVoucherResponse.Valid {
 		return &model.GetOrderResponse{}, fmt.Errorf("Voucher is not valid")
 	}
 
+	// Apply voucher discount
 	if voucher.DiscountType == constant.VOUCHER_DISCOUNT_TYPE_PERCENTAGE {
 		discountPrice := totalAmount * voucher.DiscountValue / 100
 		if discountPrice > voucher.MaxDiscountAmount {
 			discountPrice = voucher.MaxDiscountAmount
 		}
-		totalAmount = totalAmount - discountPrice
+		totalAmount -= discountPrice
 	} else if voucher.DiscountType == constant.VOUCHER_DISCOUNT_TYPE_FIXED {
-		totalAmount = totalAmount - voucher.DiscountValue
+		totalAmount -= voucher.DiscountValue
 	}
 
+	// Create order
 	newOrder := model.CreateOrderRequest{
 		CustomerID:            userId,
 		CourierID:             CourierID,
@@ -475,37 +465,9 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 		return &model.GetOrderResponse{}, err
 	}
 
+	// Create order details
 	for _, item := range productsList {
-
-		url := constant.PRODUCT_SERVICE + fmt.Sprintf("/%d", item.ProductID)
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			o.log.Errorf("Failed to create request: %v", err)
-			return &model.GetOrderResponse{}, err
-		}
-
-		// Set the context and execute the request
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			o.log.Errorf("Failed to execute request: %v", err)
-			return &model.GetOrderResponse{}, err
-		}
-		defer resp.Body.Close()
-
-		// Check if the request was successful
-		if resp.StatusCode != http.StatusOK {
-			o.log.Errorf("product service returned non-OK status: %d", resp.StatusCode)
-			return &model.GetOrderResponse{}, fmt.Errorf("ptoduct service returned non-OK status: %d", resp.StatusCode)
-		}
-
-		// Decode the response into cart items
-		var product model.GetProductResponse
-		err = json.NewDecoder(resp.Body).Decode(&product)
-		if err != nil {
-			o.log.Errorf("Failed to decode response: %v", err)
-			return &model.GetOrderResponse{}, err
-		}
+		product := productDetails[item.ProductID]
 
 		createOrderDetailRequest := model.CreateOrderDetailRequest{
 			OrderID:   createdOrder.OrderID,
@@ -516,29 +478,26 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 
 		orderDetailsData, err := json.Marshal(createOrderDetailRequest)
 		if err != nil {
-			o.log.Errorf("Failed to marshal order data: %v", err)
+			o.log.Errorf("Failed to marshal order detail request: %v", err)
 			return &model.GetOrderResponse{}, err
 		}
 
 		url = constant.ORDER_DETAILS_SERVICE
 		req, err = http.NewRequest("POST", url, bytes.NewBuffer(orderDetailsData))
 		if err != nil {
-			o.log.Errorf("Failed to create request: %v", err)
+			o.log.Errorf("Failed to create order detail request: %v", err)
 			return &model.GetOrderResponse{}, err
 		}
 
-		// Set the context and execute the request
-		client = &http.Client{}
 		resp, err = client.Do(req)
 		if err != nil {
-			o.log.Errorf("Failed to execute request: %v", err)
+			o.log.Errorf("Failed to execute order detail request: %v", err)
 			return &model.GetOrderResponse{}, err
 		}
 		defer resp.Body.Close()
 
-		// Check if the request was successful
 		if resp.StatusCode != http.StatusOK {
-			o.log.Errorf("order detail service returned non-OK status: %d", resp.StatusCode)
+			o.log.Errorf("Order detail service returned non-OK status: %d", resp.StatusCode)
 			return &model.GetOrderResponse{}, fmt.Errorf("order detail service returned non-OK status: %d", resp.StatusCode)
 		}
 	}
@@ -546,7 +505,7 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 	return createdOrder, nil
 }
 
-func (o *orderUsecase) ProcessPayment(ctx context.Context, order repository.Order, paymentMethod string) (string, error) {
+func (o *orderUsecase) ProcessPayment(ctx context.Context, order *model.GetOrderResponse, paymentMethod string) (string, error) {
 	payment := model.CreatePaymentRequest{
 		OrderID:       order.OrderID,
 		PaymentAmount: order.TotalAmount,
@@ -657,283 +616,4 @@ func (o *orderUsecase) ProcessPayment(ctx context.Context, order repository.Orde
 	}
 
 	return "", nil
-}
-
-func (o *orderUsecase) UpdateInventory(ctx context.Context, userId, cartId int64) error {
-	cartItemReq := model.GetCartItemsRequest{
-		CartID: &cartId,
-	}
-	cartItemData, err := json.Marshal(cartItemReq)
-	if err != nil {
-		o.log.Errorf("Failed to marshal order data: %v", err)
-		return err
-	}
-
-	url := constant.CART_ITEM_SERVICE
-	req, err := http.NewRequest("GET", url, bytes.NewBuffer(cartItemData))
-	if err != nil {
-		o.log.Errorf("Failed to create request: %v", err)
-		return err
-	}
-
-	// Set the context and execute the request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		o.log.Errorf("Failed to execute request: %v", err)
-		return err
-	}
-	defer resp.Body.Close()
-
-	// Check if the request was successful
-	if resp.StatusCode != http.StatusOK {
-		o.log.Errorf("cart item service returned non-OK status: %d", resp.StatusCode)
-		return fmt.Errorf("cart item service returned non-OK status: %d", resp.StatusCode)
-	}
-
-	// Decode the response into cart items
-	var productsList []model.GetCartItemResponse
-	err = json.NewDecoder(resp.Body).Decode(&productsList)
-	if err != nil {
-		o.log.Errorf("Failed to decode response: %v", err)
-		return err
-	}
-
-	for _, product := range productsList {
-		url := constant.PRODUCT_SERVICE + fmt.Sprintf("/%d", product.ProductID)
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			o.log.Errorf("Failed to create request: %v", err)
-			return err
-		}
-
-		// Set the context and execute the request
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			o.log.Errorf("Failed to execute request: %v", err)
-			return err
-		}
-		defer resp.Body.Close()
-
-		// Check if the request was successful
-		if resp.StatusCode != http.StatusOK {
-			o.log.Errorf("product service returned non-OK status: %d", resp.StatusCode)
-			return fmt.Errorf("product service returned non-OK status: %d", resp.StatusCode)
-		}
-
-		// Decode the response into cart items
-		var p model.GetProductResponse
-		err = json.NewDecoder(resp.Body).Decode(&p)
-		if err != nil {
-			o.log.Errorf("Failed to decode response: %v", err)
-			return err
-		}
-
-		p.Quantity -= product.Quantity
-
-		updateProductRequest := model.UpdateProductRequest{
-			ProductID:   p.ProductID,
-			SellerID:    p.SellerID,
-			ProductName: p.ProductName,
-			Description: p.Description,
-			Price:       p.Price,
-			Quantity:    p.Quantity,
-			CategoryID:  p.CategoryID,
-			ImageURL:    p.ImageURL,
-		}
-
-		productData, err := json.Marshal(updateProductRequest)
-		if err != nil {
-			o.log.Errorf("Failed to marshal order data: %v", err)
-			return err
-		}
-
-		url = constant.PRODUCT_SERVICE
-		req, err = http.NewRequest("PUT", url, bytes.NewBuffer(productData))
-		if err != nil {
-			o.log.Errorf("Failed to create request: %v", err)
-			return err
-		}
-
-		// Set the context and execute the request
-		client = &http.Client{}
-		resp, err = client.Do(req)
-		if err != nil {
-			o.log.Errorf("Failed to execute request: %v", err)
-			return err
-		}
-
-		// Check if the request was successful
-		if resp.StatusCode != http.StatusOK {
-			o.log.Errorf("product service returned non-OK status: %d", resp.StatusCode)
-			return fmt.Errorf("product service returned non-OK status: %d", resp.StatusCode)
-		}
-	}
-
-	return nil
-}
-
-func (o *orderUsecase) SendNotification(ctx context.Context, orderID int64) error {
-	order, err := o.orderRepo.Get(ctx, orderID)
-	if err != nil {
-		return err
-	}
-
-	getUserRequest := model.GetUserRequest{
-		UserID: &order.CustomerID,
-	}
-
-	userData, err := json.Marshal(getUserRequest)
-	if err != nil {
-		o.log.Errorf("Failed to marshal order data: %v", err)
-		return err
-	}
-
-	url := constant.USER_SERVICE + "/get-user"
-	req, err := http.NewRequest("GET", url, bytes.NewBuffer(userData))
-	if err != nil {
-		o.log.Errorf("Failed to create request: %v", err)
-		return err
-	}
-
-	// Set the context and execute the request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		o.log.Errorf("Failed to execute request: %v", err)
-		return err
-	}
-
-	// Check if the request was successful
-	if resp.StatusCode != http.StatusOK {
-		o.log.Errorf("user service returned non-OK status: %d", resp.StatusCode)
-		return fmt.Errorf("user service returned non-OK status: %d", resp.StatusCode)
-	}
-
-	// Decode the response into cart items
-	var customer model.GetUserResponse
-	err = json.NewDecoder(resp.Body).Decode(&customer)
-	if err != nil {
-		o.log.Errorf("Failed to decode response: %v", err)
-		return err
-	}
-
-	orderDetailsRequest := model.GetOrderDetailsRequest{
-		OrderID: &orderID,
-	}
-
-	orderDetailsData, err := json.Marshal(orderDetailsRequest)
-	if err != nil {
-		o.log.Errorf("Failed to marshal order data: %v", err)
-		return err
-	}
-
-	url = constant.ORDER_DETAILS_SERVICE
-	req, err = http.NewRequest("GET", url, bytes.NewBuffer(orderDetailsData))
-	if err != nil {
-		o.log.Errorf("Failed to create request: %v", err)
-		return err
-	}
-
-	// Set the context and execute the request
-	client = &http.Client{}
-	resp, err = client.Do(req)
-	if err != nil {
-		o.log.Errorf("Failed to execute request: %v", err)
-		return err
-	}
-
-	// Check if the request was successful
-	if resp.StatusCode != http.StatusOK {
-		o.log.Errorf("order detail service returned non-OK status: %d", resp.StatusCode)
-		return fmt.Errorf("order detail service returned non-OK status: %d", resp.StatusCode)
-	}
-
-	// Decode the response into cart items
-	var orderDetails []model.GetOrderDetailResponse
-	err = json.NewDecoder(resp.Body).Decode(&orderDetails)
-	if err != nil {
-		o.log.Errorf("Failed to decode response: %v", err)
-		return err
-	}
-
-	user := model.User{
-		UserID:       customer.UserID,
-		Email:        customer.Email,
-		PasswordHash: customer.PasswordHash,
-		FullName:     customer.FullName,
-		PhoneNumber:  customer.PhoneNumber,
-		Address:      customer.Address,
-		Role:         customer.Role,
-		ImageURL:     customer.ImageURL,
-		CreatedAt:    util.ParseTime(customer.CreatedAt),
-		UpdatedAt:    util.ParseTime(customer.UpdatedAt),
-		Token:        customer.Token,
-		TokenExpires: util.ParseTime(customer.TokenExpires),
-		IsDeleted:    customer.IsDeleted,
-	}
-
-	orderModel := model.Order{
-		OrderID:               order.OrderID,
-		CustomerID:            order.CustomerID,
-		OrderDate:             order.OrderDate,
-		ShippingAddress:       order.ShippingAddress,
-		CourierID:             order.CourierID,
-		TotalAmount:           order.TotalAmount,
-		OrderStatus:           order.OrderStatus,
-		FreightPrice:          order.FreightPrice,
-		EstimatedDeliveryDate: order.EstimatedDeliveryDate,
-		ActualDeliveryDate:    order.ActualDeliveryDate,
-		VoucherID:             order.VoucherID,
-		IsDeleted:             order.IsDeleted,
-		CreatedAt:             order.CreatedAt,
-		UpdatedAt:             order.UpdatedAt,
-	}
-
-	var orderDetailsModel []model.OrderDetail
-	for _, detail := range orderDetails {
-		orderDetailsModel = append(orderDetailsModel, model.OrderDetail{
-			OrderID:   detail.OrderID,
-			ProductID: detail.ProductID,
-			Quantity:  detail.Quantity,
-			UnitPrice: detail.UnitPrice,
-		})
-	}
-
-	request := model.SendOrderDetailsRequest{
-		Customer:     user,
-		Order:        orderModel,
-		OrderDetails: orderDetailsModel,
-	}
-
-	mailModel, err := json.Marshal(request)
-	if err != nil {
-		o.log.Errorf("Failed to marshal order data: %v", err)
-		return err
-	}
-
-	url = constant.MAIL_SERVICE + "/send-order-details"
-	req, err = http.NewRequest("POST", url, bytes.NewBuffer(mailModel))
-	if err != nil {
-		o.log.Errorf("Failed to create request: %v", err)
-		return err
-	}
-
-	// Set the context and execute the request
-	client = &http.Client{}
-	resp, err = client.Do(req)
-	if err != nil {
-		o.log.Errorf("Failed to execute request: %v", err)
-		return err
-	}
-	defer resp.Body.Close()
-
-	// Check if the request was successful
-	if resp.StatusCode != http.StatusOK {
-		o.log.Errorf("mail service returned non-OK status: %d", resp.StatusCode)
-		return fmt.Errorf("mail service returned non-OK status: %d", resp.StatusCode)
-	}
-
-	return nil
 }

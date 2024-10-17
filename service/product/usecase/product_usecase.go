@@ -18,7 +18,7 @@ import (
 const tsCreateTimeLayout = "2006-01-02 15:04:05 +0700"
 const fallbackPrice = 1000.0 // Fallback price if the calculated price is less than 0
 
-type productUsecase struct {
+type ProductUsecase struct {
 	log         *logrus.Logger
 	productRepo repository.IProductRepository
 }
@@ -31,16 +31,17 @@ type IProductUsecase interface {
 	DeleteProduct(ctx context.Context, req *model.DeleteProductRequest) error
 	GetProductList(ctx context.Context, req *model.GetProductsRequest) (*util.PaginatedList[model.GetProductListResponse], error)
 	GetProductPriceAfterDiscount(ctx context.Context, req *model.GetProductPriceAfterDiscount) (float64, error)
+	UpdateInventory(ctx context.Context, userId, cartId int64) error
 }
 
 func NewProductUsecase(productRepo repository.IProductRepository, log *logrus.Logger) IProductUsecase {
-	return &productUsecase{
+	return &ProductUsecase{
 		productRepo: productRepo,
 		log:         log,
 	}
 }
 
-func (pu *productUsecase) GetProduct(ctx context.Context, req *model.GetProductRequest) (*model.GetProductResponse, error) {
+func (pu *ProductUsecase) GetProduct(ctx context.Context, req *model.GetProductRequest) (*model.GetProductResponse, error) {
 	pu.log.Infof("Fetching product with ID: %d", req.ProductID)
 	product, err := pu.productRepo.Get(ctx, req.ProductID)
 	if err != nil {
@@ -64,7 +65,7 @@ func (pu *productUsecase) GetProduct(ctx context.Context, req *model.GetProductR
 	}, nil
 }
 
-func (pu *productUsecase) GetAllProducts(ctx context.Context) ([]*model.GetProductResponse, error) {
+func (pu *ProductUsecase) GetAllProducts(ctx context.Context) ([]*model.GetProductResponse, error) {
 	pu.log.Info("Fetching all products")
 	products, err := pu.productRepo.GetAll(ctx)
 	if err != nil {
@@ -93,7 +94,7 @@ func (pu *productUsecase) GetAllProducts(ctx context.Context) ([]*model.GetProdu
 	return productResponses, nil
 }
 
-func (pu *productUsecase) CreateProduct(ctx context.Context, product *model.CreateProductRequest) (*model.GetProductResponse, error) {
+func (pu *ProductUsecase) CreateProduct(ctx context.Context, product *model.CreateProductRequest) (*model.GetProductResponse, error) {
 	pu.log.Infof("Creating product: %+v", product)
 	productData := repository.Product{
 		SellerID:    product.SellerID,
@@ -127,7 +128,7 @@ func (pu *productUsecase) CreateProduct(ctx context.Context, product *model.Crea
 	}, nil
 }
 
-func (pu *productUsecase) DeleteProduct(ctx context.Context, req *model.DeleteProductRequest) error {
+func (pu *ProductUsecase) DeleteProduct(ctx context.Context, req *model.DeleteProductRequest) error {
 	pu.log.Infof("Deleting product with ID: %d", req.ProductID)
 	product, err := pu.productRepo.Get(ctx, req.ProductID)
 	if err != nil {
@@ -147,7 +148,7 @@ func (pu *productUsecase) DeleteProduct(ctx context.Context, req *model.DeletePr
 	return nil
 }
 
-func (pu *productUsecase) UpdateProduct(ctx context.Context, rep *model.UpdateProductRequest) (*model.GetProductResponse, error) {
+func (pu *ProductUsecase) UpdateProduct(ctx context.Context, rep *model.UpdateProductRequest) (*model.GetProductResponse, error) {
 	pu.log.Infof("Updating product with ID: %d", rep.ProductID)
 	product, err := pu.productRepo.Get(ctx, rep.ProductID)
 	if err != nil {
@@ -186,7 +187,7 @@ func (pu *productUsecase) UpdateProduct(ctx context.Context, rep *model.UpdatePr
 	}, nil
 }
 
-func (pu *productUsecase) GetProductList(ctx context.Context, req *model.GetProductsRequest) (*util.PaginatedList[model.GetProductListResponse], error) {
+func (pu *ProductUsecase) GetProductList(ctx context.Context, req *model.GetProductsRequest) (*util.PaginatedList[model.GetProductListResponse], error) {
 	pu.log.Infof("Fetching product list with request: %+v", req)
 	products, err := pu.productRepo.GetList(ctx, req)
 	if err != nil {
@@ -233,7 +234,7 @@ func (pu *productUsecase) GetProductList(ctx context.Context, req *model.GetProd
 	return list, nil
 }
 
-func (pu *productUsecase) GetProductPriceAfterDiscount(ctx context.Context, req *model.GetProductPriceAfterDiscount) (float64, error) {
+func (pu *ProductUsecase) GetProductPriceAfterDiscount(ctx context.Context, req *model.GetProductPriceAfterDiscount) (float64, error) {
 	pu.log.Infof("Fetching product price after discount with product ID: %d", req.ProductID)
 
 	product, err := pu.productRepo.Get(ctx, req.ProductID)
@@ -344,4 +345,60 @@ func (pu *productUsecase) GetProductPriceAfterDiscount(ctx context.Context, req 
 
 	pu.log.Infof("Fetched product price after discount: %f", product.Price)
 	return product.Price, nil
+}
+
+func (o *ProductUsecase) UpdateInventory(ctx context.Context, userId, cartId int64) error {
+	cartItemReq := model.GetCartItemsRequest{
+		CartID: &cartId,
+	}
+	cartItemData, err := json.Marshal(cartItemReq)
+	if err != nil {
+		o.log.Errorf("Failed to marshal order data: %v", err)
+		return err
+	}
+
+	url := constant.CART_ITEM_SERVICE
+	req, err := http.NewRequest("GET", url, bytes.NewBuffer(cartItemData))
+	if err != nil {
+		o.log.Errorf("Failed to create request: %v", err)
+		return err
+	}
+
+	// Set the context and execute the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		o.log.Errorf("Failed to execute request: %v", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Check if the request was successful
+	if resp.StatusCode != http.StatusOK {
+		o.log.Errorf("cart item service returned non-OK status: %d", resp.StatusCode)
+		return fmt.Errorf("cart item service returned non-OK status: %d", resp.StatusCode)
+	}
+
+	// Decode the response into cart items
+	var productsList []model.GetCartItemResponse
+	err = json.NewDecoder(resp.Body).Decode(&productsList)
+	if err != nil {
+		o.log.Errorf("Failed to decode response: %v", err)
+		return err
+	}
+
+	for _, product := range productsList {
+		p, err := o.productRepo.Get(ctx, product.ProductID)
+		if err != nil {
+			return err
+		}
+
+		p.Quantity -= product.Quantity
+		_, err = o.productRepo.Update(ctx, p)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

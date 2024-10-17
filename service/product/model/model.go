@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+type GetCartItemResponse struct {
+	CartID    int64 `json:"cart_id"`
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
+}
+type GetCartItemsRequest struct {
+	CartID    *int64 `json:"cart_id"`
+	ProductID *int64 `json:"product_id"`
+}
+
 type GetDiscountResponse struct {
 	DiscountID    int64   `json:"discount_id"`
 	DiscountType  string  `json:"discount_type"`
