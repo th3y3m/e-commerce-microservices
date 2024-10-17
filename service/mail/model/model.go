@@ -56,7 +56,7 @@ type Product struct {
 }
 
 type SendOrderDetailsRequest struct {
-	Customer     User          `json:"customer" binding:"required"`
+	Customer     User          `json:"user" binding:"required"`
 	Order        Order         `json:"order" binding:"required"`
 	OrderDetails []OrderDetail `json:"order_details" binding:"required"`
 }

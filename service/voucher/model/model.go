@@ -5,6 +5,22 @@ import (
 	"time"
 )
 
+type Order struct {
+	OrderID               int64     `json:"order_id"`
+	CustomerID            int64     `json:"customer_id"`
+	OrderDate             string    `json:"order_date"`
+	TotalAmount           float64   `json:"total_amount"`
+	OrderStatus           string    `json:"order_status"`
+	ShippingAddress       string    `json:"shipping_address"`
+	CourierID             int64     `json:"courier_id"`
+	FreightPrice          float64   `json:"freight_price"`
+	EstimatedDeliveryDate time.Time `json:"estimated_delivery_date"`
+	ActualDeliveryDate    time.Time `json:"actual_delivery_date"`
+	VoucherID             int64     `json:"voucher_id"`
+	IsDeleted             bool      `json:"is_deleted"`
+	CreatedAt             time.Time `json:"created_at"`
+	UpdatedAt             time.Time `json:"updated_at"`
+}
 type GetVoucherRequest struct {
 	VoucherID int64 `json:"voucher_id"`
 }
@@ -14,6 +30,11 @@ type GetVouchersRequest struct {
 	IsAvailable  *bool       `json:"is_available"`
 	IsDeleted    *bool       `json:"is_deleted"`
 	Paging       util.Paging `json:"paging"`
+}
+
+type CheckVoucherUsageRequest struct {
+	VoucherID int64 `json:"voucher_id"`
+	Order     Order `json:"order"`
 }
 
 type DeleteVoucherRequest struct {

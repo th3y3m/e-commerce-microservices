@@ -24,6 +24,7 @@ type IVoucherUsecase interface {
 	UpdateVoucher(ctx context.Context, rep *model.UpdateVoucherRequest) (*model.GetVoucherResponse, error)
 	DeleteVoucher(ctx context.Context, req *model.DeleteVoucherRequest) error
 	GetVoucherList(ctx context.Context, req *model.GetVouchersRequest) (*util.PaginatedList[model.GetVoucherResponse], error)
+	CheckVoucherUsage(ctx context.Context, req *model.CheckVoucherUsageRequest) (bool, error)
 }
 
 func NewVoucherUsecase(voucherRepo repository.IVoucherRepository, log *logrus.Logger) IVoucherUsecase {
@@ -43,7 +44,19 @@ func (pu *voucherUsecase) GetVoucher(ctx context.Context, req *model.GetVoucherR
 
 	pu.log.Infof("Fetched voucher: %+v", voucher)
 	return &model.GetVoucherResponse{
-		VoucherID: voucher.VoucherID,
+		VoucherID:          voucher.VoucherID,
+		VoucherCode:        voucher.VoucherCode,
+		DiscountType:       voucher.DiscountType,
+		DiscountValue:      voucher.DiscountValue,
+		MinimumOrderAmount: voucher.MinimumOrderAmount,
+		MaxDiscountAmount:  voucher.MaxDiscountAmount,
+		StartDate:          voucher.StartDate.Format(tsCreateTimeLayout),
+		EndDate:            voucher.EndDate.Format(tsCreateTimeLayout),
+		UsageLimit:         voucher.UsageLimit,
+		UsageCount:         voucher.UsageCount,
+		IsDeleted:          voucher.IsDeleted,
+		CreatedAt:          voucher.CreatedAt.Format(tsCreateTimeLayout),
+		UpdatedAt:          voucher.UpdatedAt.Format(tsCreateTimeLayout),
 	}, nil
 }
 
@@ -219,4 +232,45 @@ func (pu *voucherUsecase) GetVoucherList(ctx context.Context, req *model.GetVouc
 
 	pu.log.Infof("Fetched %d vouchers", len(voucherResponses))
 	return list, nil
+}
+
+func (pu *voucherUsecase) CheckVoucherUsage(ctx context.Context, req *model.CheckVoucherUsageRequest) (bool, error) {
+	pu.log.Infof("Checking voucher usage with voucher ID: %d", req.VoucherID)
+	voucher, err := pu.voucherRepo.Get(ctx, req.VoucherID)
+	if err != nil {
+		pu.log.Errorf("Error fetching voucher for usage check: %v", err)
+		return false, err
+	}
+
+	// Check if voucher is deleted
+	if voucher.IsDeleted {
+		pu.log.Infof("Voucher is deleted")
+		return false, nil
+	}
+
+	if voucher.UsageLimit == 0 {
+		pu.log.Infof("Voucher has unlimited usage")
+		return true, nil
+	}
+
+	if voucher.UsageCount >= voucher.UsageLimit {
+		pu.log.Infof("Voucher has reached its usage limit")
+		return false, nil
+	}
+
+	// Check if voucher is expired
+	if time.Now().After(voucher.EndDate) || time.Now().Before(voucher.StartDate) {
+		pu.log.Infof("Voucher has expired")
+		return false, nil
+	}
+
+	// Check if voucher is applicable
+	if req.Order.TotalAmount < voucher.MinimumOrderAmount {
+		pu.log.Infof("Voucher is not applicable")
+		return false, nil
+	}
+
+	pu.log.Infof("Voucher has not reached its usage limit")
+	return true, nil
+
 }

@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"strconv"
 	"th3y3m/e-commerce-microservices/service/voucher/dependency_injection"
 	"th3y3m/e-commerce-microservices/service/voucher/model"
 
@@ -12,14 +13,17 @@ func GetVoucherByID(c *gin.Context) {
 	module := dependency_injection.NewVoucherUsecaseProvider()
 
 	var req model.GetVoucherRequest
-	err := c.BindJSON(&req)
+
+	id := c.Param("voucher_id")
+	voucherID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		logrus.Error(err)
 		c.JSON(400, gin.H{
-			"error": "Bad Request",
+			"error": "Invalid voucher ID",
 		})
 		return
 	}
+	req.VoucherID = voucherID
 
 	voucher, err := module.GetVoucher(c, &req)
 	if err != nil {
@@ -153,4 +157,31 @@ func GetPaginatedVoucher(c *gin.Context) {
 	}
 
 	c.JSON(200, vouchers)
+}
+
+func CheckVoucherUsage(c *gin.Context) {
+	module := dependency_injection.NewVoucherUsecaseProvider()
+
+	var req model.CheckVoucherUsageRequest
+	err := c.BindJSON(&req)
+	if err != nil {
+		logrus.Error(err)
+		c.JSON(400, gin.H{
+			"error": "Bad Request",
+		})
+		return
+	}
+
+	isValid, err := module.CheckVoucherUsage(c, &req)
+	if err != nil {
+		logrus.Error(err)
+		c.JSON(500, gin.H{
+			"error": "Internal Server Error",
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"valid": isValid,
+	})
 }

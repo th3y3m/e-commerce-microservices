@@ -14,6 +14,7 @@ func RegisterHandlers() *gin.Engine {
 		voucher.POST("", CreateVoucher)
 		voucher.PUT("", UpdateVoucher)
 		voucher.DELETE("", DeleteVoucher)
+		voucher.POST("/check-usage", CheckVoucherUsage)
 	}
 
 	return r

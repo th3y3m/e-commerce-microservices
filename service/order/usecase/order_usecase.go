@@ -30,6 +30,10 @@ type IOrderUsecase interface {
 	UpdateOrder(ctx context.Context, rep *model.UpdateOrderRequest) (*model.GetOrderResponse, error)
 	DeleteOrder(ctx context.Context, req *model.DeleteOrderRequest) error
 	GetOrderList(ctx context.Context, req *model.GetOrdersRequest) (*util.PaginatedList[model.GetOrderResponse], error)
+	ProcessOrder(ctx context.Context, userId, cartId, CourierID, VoucherID int64, shipAddress, paymentMethod string, freight float64) (*model.GetOrderResponse, error)
+	ProcessPayment(ctx context.Context, order repository.Order, paymentMethod string) (string, error)
+	UpdateInventory(ctx context.Context, userId, cartId int64) error
+	SendNotification(ctx context.Context, orderID int64) error
 }
 
 func NewOrderUsecase(orderRepo repository.IOrderRepository, log *logrus.Logger) IOrderUsecase {
@@ -347,6 +351,110 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 		}
 
 		totalAmount += p.Price * float64(product.Quantity)
+	}
+
+	url = constant.VOUCHER_SERVICE + fmt.Sprintf("/%d", VoucherID)
+	req, err = http.NewRequest("GET", url, nil)
+	if err != nil {
+		o.log.Errorf("Failed to create request: %v", err)
+		return &model.GetOrderResponse{}, err
+	}
+
+	// Set the context and execute the request
+	client = &http.Client{}
+	resp, err = client.Do(req)
+	if err != nil {
+		o.log.Errorf("Failed to execute request: %v", err)
+		return &model.GetOrderResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	// Check if the request was successful
+	if resp.StatusCode != http.StatusOK {
+		o.log.Errorf("voucher service returned non-OK status: %d", resp.StatusCode)
+		return &model.GetOrderResponse{}, fmt.Errorf("voucher service returned non-OK status: %d", resp.StatusCode)
+	}
+
+	// Decode the response into cart items
+	var voucher model.GetVoucherResponse
+	err = json.NewDecoder(resp.Body).Decode(&voucher)
+	if err != nil {
+		o.log.Errorf("Failed to decode response: %v", err)
+		return &model.GetOrderResponse{}, err
+	}
+
+	checkVoucherUsageRequest := model.CheckVoucherUsageRequest{
+		VoucherID: VoucherID,
+		Order: model.Order{
+			OrderID:               0,
+			CustomerID:            userId,
+			OrderDate:             time.Now(),
+			ShippingAddress:       shipAddress,
+			CourierID:             CourierID,
+			TotalAmount:           totalAmount,
+			OrderStatus:           "Pending",
+			FreightPrice:          freight,
+			EstimatedDeliveryDate: time.Now(),
+			ActualDeliveryDate:    time.Now(),
+			VoucherID:             VoucherID,
+			IsDeleted:             false,
+			CreatedAt:             time.Now(),
+			UpdatedAt:             time.Now(),
+		},
+	}
+
+	checkVoucherUsageRequestData, err := json.Marshal(checkVoucherUsageRequest)
+	if err != nil {
+		o.log.Errorf("Failed to marshal order data: %v", err)
+		return &model.GetOrderResponse{}, err
+	}
+
+	url = constant.VOUCHER_SERVICE + "/check-usage"
+	req, err = http.NewRequest("POST", url, bytes.NewBuffer(checkVoucherUsageRequestData))
+	if err != nil {
+		o.log.Errorf("Failed to create request: %v", err)
+		return &model.GetOrderResponse{}, err
+	}
+
+	// Set the context and execute the request
+	client = &http.Client{}
+	resp, err = client.Do(req)
+	if err != nil {
+		o.log.Errorf("Failed to execute request: %v", err)
+		return &model.GetOrderResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	// Check if the request was successful
+	if resp.StatusCode != http.StatusOK {
+		o.log.Errorf("voucher service returned non-OK status: %d", resp.StatusCode)
+		return &model.GetOrderResponse{}, fmt.Errorf("voucher service returned non-OK status: %d", resp.StatusCode)
+	}
+
+	var checkVoucherResponse model.CheckVoucherUsageResponse
+
+	// Decode the response body into the struct
+	err = json.NewDecoder(resp.Body).Decode(&checkVoucherResponse)
+	if err != nil {
+		o.log.Errorf("Failed to decode response: %v", err)
+		return &model.GetOrderResponse{}, err
+	}
+
+	// Log the result and return the valid status
+	o.log.Infof("Voucher validity: %v", checkVoucherResponse.Valid)
+
+	if !checkVoucherResponse.Valid {
+		return &model.GetOrderResponse{}, fmt.Errorf("Voucher is not valid")
+	}
+
+	if voucher.DiscountType == constant.VOUCHER_DISCOUNT_TYPE_PERCENTAGE {
+		discountPrice := totalAmount * voucher.DiscountValue / 100
+		if discountPrice > voucher.MaxDiscountAmount {
+			discountPrice = voucher.MaxDiscountAmount
+		}
+		totalAmount = totalAmount - discountPrice
+	} else if voucher.DiscountType == constant.VOUCHER_DISCOUNT_TYPE_FIXED {
+		totalAmount = totalAmount - voucher.DiscountValue
 	}
 
 	newOrder := model.CreateOrderRequest{
@@ -750,7 +858,82 @@ func (o *orderUsecase) SendNotification(ctx context.Context, orderID int64) erro
 		return err
 	}
 
-	o.mailService.SendOrderDetails(customer, order, orderDetails)
+	user := model.User{
+		UserID:       customer.UserID,
+		Email:        customer.Email,
+		PasswordHash: customer.PasswordHash,
+		FullName:     customer.FullName,
+		PhoneNumber:  customer.PhoneNumber,
+		Address:      customer.Address,
+		Role:         customer.Role,
+		ImageURL:     customer.ImageURL,
+		CreatedAt:    util.ParseTime(customer.CreatedAt),
+		UpdatedAt:    util.ParseTime(customer.UpdatedAt),
+		Token:        customer.Token,
+		TokenExpires: util.ParseTime(customer.TokenExpires),
+		IsDeleted:    customer.IsDeleted,
+	}
+
+	orderModel := model.Order{
+		OrderID:               order.OrderID,
+		CustomerID:            order.CustomerID,
+		OrderDate:             order.OrderDate,
+		ShippingAddress:       order.ShippingAddress,
+		CourierID:             order.CourierID,
+		TotalAmount:           order.TotalAmount,
+		OrderStatus:           order.OrderStatus,
+		FreightPrice:          order.FreightPrice,
+		EstimatedDeliveryDate: order.EstimatedDeliveryDate,
+		ActualDeliveryDate:    order.ActualDeliveryDate,
+		VoucherID:             order.VoucherID,
+		IsDeleted:             order.IsDeleted,
+		CreatedAt:             order.CreatedAt,
+		UpdatedAt:             order.UpdatedAt,
+	}
+
+	var orderDetailsModel []model.OrderDetail
+	for _, detail := range orderDetails {
+		orderDetailsModel = append(orderDetailsModel, model.OrderDetail{
+			OrderID:   detail.OrderID,
+			ProductID: detail.ProductID,
+			Quantity:  detail.Quantity,
+			UnitPrice: detail.UnitPrice,
+		})
+	}
+
+	request := model.SendOrderDetailsRequest{
+		Customer:     user,
+		Order:        orderModel,
+		OrderDetails: orderDetailsModel,
+	}
+
+	mailModel, err := json.Marshal(request)
+	if err != nil {
+		o.log.Errorf("Failed to marshal order data: %v", err)
+		return err
+	}
+
+	url = constant.MAIL_SERVICE + "/send-order-details"
+	req, err = http.NewRequest("POST", url, bytes.NewBuffer(mailModel))
+	if err != nil {
+		o.log.Errorf("Failed to create request: %v", err)
+		return err
+	}
+
+	// Set the context and execute the request
+	client = &http.Client{}
+	resp, err = client.Do(req)
+	if err != nil {
+		o.log.Errorf("Failed to execute request: %v", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Check if the request was successful
+	if resp.StatusCode != http.StatusOK {
+		o.log.Errorf("mail service returned non-OK status: %d", resp.StatusCode)
+		return fmt.Errorf("mail service returned non-OK status: %d", resp.StatusCode)
+	}
 
 	return nil
 }

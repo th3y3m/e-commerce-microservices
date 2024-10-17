@@ -40,4 +40,7 @@ const ORDER_STATUS_CANCELED = "Canceled"
 const PAYMENT_METHOD_MOMO = "MoMo"
 const PAYMENT_METHOD_VNPAY = "VnPay"
 
+const VOUCHER_DISCOUNT_TYPE_PERCENTAGE = "Percentage"
+const VOUCHER_DISCOUNT_TYPE_FIXED = "Fixed"
+
 var ErrNoProductDiscountsFound = errors.New("no product discounts found")
