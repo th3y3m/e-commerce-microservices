@@ -13,7 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./script.sql:/docker-entrypoint-initdb.d/script.sql
     networks:
-      - book_network
+      - e_commerce_network
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
@@ -25,7 +25,7 @@ services:
     ports:
       - "6379:6379"
     networks:
-      - book_network
+      - e_commerce_network
 
   rabbitmq_service:
     image: rabbitmq:management
@@ -33,7 +33,7 @@ services:
       - "5672:5672"
       - "15672:15672"
     networks:
-      - book_network
+      - e_commerce_network
     healthcheck:
       test: [ "CMD-SHELL", "rabbitmq-diagnostics -q ping" ]
       interval: 10s
@@ -60,11 +60,429 @@ services:
       rabbitmq_service:
         condition: service_healthy
     networks:
-      - book_network
+      - e_commerce_network
+
+  authentication_service:
+    build:
+      context: .
+      dockerfile: service/authentication/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  mail_service:
+    build:
+      context: .
+      dockerfile: service/mail/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  cart_service:
+    build:
+      context: .
+      dockerfile: service/cart/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  cart_item_service:
+    build:
+      context: .
+      dockerfile: service/cart_item/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  category_service:
+    build:
+      context: .
+      dockerfile: service/category/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  courier_service:
+    build:
+      context: .
+      dockerfile: service/courier/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  discount_service:
+    build:
+      context: .
+      dockerfile: service/discount/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  freight_rate_service:
+    build:
+      context: .
+      dockerfile: service/freight_rate/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  momo_service:
+    build:
+      context: .
+      dockerfile: service/momo/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  news_service:
+    build:
+      context: .
+      dockerfile: service/news/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  oauth_service:
+    build:
+      context: .
+      dockerfile: service/oauth/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  order_service:
+    build:
+      context: .
+      dockerfile: service/order/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  order_detail_service:
+    build:
+      context: .
+      dockerfile: service/order_detail/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  payment_service:
+    build:
+      context: .
+      dockerfile: service/payment/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  product_discount_service:
+    build:
+      context: .
+      dockerfile: service/product_discount/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  review_service:
+    build:
+      context: .
+      dockerfile: service/review/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  user_service:
+    build:
+      context: .
+      dockerfile: service/user/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  vnpay_service:
+    build:
+      context: .
+      dockerfile: service/vnpay/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  voucher_service:
+    build:
+      context: .
+      dockerfile: service/voucher/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
 
 volumes:
   postgres_data:
 
 
 networks:
-  book_network:
+  e_commerce_network:
