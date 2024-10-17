@@ -5,6 +5,8 @@ import (
 	"th3y3m/e-commerce-microservices/service/user/dependency_injection"
 	"th3y3m/e-commerce-microservices/service/user/model"
 
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
@@ -152,4 +154,38 @@ func GetPaginatedUser(c *gin.Context) {
 	}
 
 	c.JSON(200, users)
+}
+
+func VerifyToken(c *gin.Context) {
+	module := dependency_injection.NewUserUsecaseProvider()
+
+	token := c.Query("token")
+	userID := c.Query("user_id")
+
+	if token == "" || userID == "" {
+		c.JSON(400, gin.H{
+			"error": "Bad Request",
+		})
+		return
+	}
+	userIDInt, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		logrus.Error(err)
+		c.JSON(400, gin.H{
+			"error": "Bad Request",
+		})
+		return
+	}
+	isValid, err := module.VerifyToken(c, token, userIDInt)
+	if err != nil {
+		logrus.Error(err)
+		c.JSON(500, gin.H{
+			"error": "Internal Server Error",
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"is_valid": isValid,
+	})
 }

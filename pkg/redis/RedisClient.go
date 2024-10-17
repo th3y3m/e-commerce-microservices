@@ -2,6 +2,8 @@ package redis_client
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/redis/go-redis/v9"
@@ -26,8 +28,9 @@ func ConnectToRedis() (*redis.Client, error) {
 	// Test Redis connection
 	_, err = redisClient.Ping(context.Background()).Result()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 
+	log.Println("Connected to Redis")
 	return redisClient, nil
 }

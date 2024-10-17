@@ -2,6 +2,9 @@ package model
 
 import "time"
 
+type VerifyTokenResponse struct {
+	IsValid bool `json:"is_valid"`
+}
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -23,6 +26,7 @@ type UpdateUserRequest struct {
 	ImageURL     string    `json:"image_url"`
 	Token        string    `json:"token"`
 	TokenExpires time.Time `json:"token_expires"`
+	IsVerified   bool      `json:"is_verified"`
 	IsDeleted    bool      `json:"is_deleted"`
 }
 
@@ -39,6 +43,7 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	Token        string    `json:"token"`
 	TokenExpires time.Time `json:"token_expires"`
+	IsVerified   bool      `json:"is_verified"`
 	IsDeleted    bool      `json:"is_deleted"`
 }
 type CreateUserRequest struct {

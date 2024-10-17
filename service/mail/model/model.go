@@ -25,6 +25,7 @@ type GetUserResponse struct {
 	UpdatedAt    string `json:"updated_at"`
 	Token        string `json:"token"`
 	TokenExpires string `json:"token_expires"`
+	IsVerified   bool   `json:"is_verified"`
 	IsDeleted    bool   `json:"is_deleted"`
 }
 type GetUserRequest struct {
@@ -60,6 +61,7 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	Token        string    `json:"token"`
 	TokenExpires time.Time `json:"token_expires"`
+	IsVerified   bool      `json:"is_verified"`
 	IsDeleted    bool      `json:"is_deleted"`
 }
 

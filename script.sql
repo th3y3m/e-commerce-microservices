@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS public.users
     token text COLLATE pg_catalog."default",
     token_expires timestamp with time zone,
     is_deleted boolean DEFAULT false,
+    is_verified boolean DEFAULT false,
     CONSTRAINT users_pkey PRIMARY KEY (user_id),
     CONSTRAINT uni_users_email UNIQUE (email)
 );

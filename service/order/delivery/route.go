@@ -11,7 +11,7 @@ func RegisterHandlers() *gin.Engine {
 	{
 		order.GET("/:order_id", GetOrderByID)
 		order.GET("", GetPaginatedOrder)
-		order.POST("", CreateOrder)
+		order.POST("", PlaceOrder)
 		order.PUT("", UpdateOrder)
 		order.DELETE("", DeleteOrder)
 	}

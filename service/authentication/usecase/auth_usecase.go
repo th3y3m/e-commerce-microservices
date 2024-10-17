@@ -21,6 +21,7 @@ type authUsecase struct {
 type IAuthUsecase interface {
 	Login(email, password string) (string, error)
 	RegisterCustomer(email, password, confirmPassword string) error
+	VerifyUserEmail(token string) error
 }
 
 func NewAuthUsecase(log *logrus.Logger) IAuthUsecase {
@@ -28,11 +29,6 @@ func NewAuthUsecase(log *logrus.Logger) IAuthUsecase {
 		log: log,
 	}
 }
-
-// func init() {
-// 	// Start the scheduler in the background
-// 	scheduler.StartAsync()
-// }
 
 func (o *authUsecase) Login(email, password string) (string, error) {
 	if email == "" || password == "" {
@@ -172,6 +168,7 @@ func (o *authUsecase) RegisterCustomer(email, password, confirmPassword string) 
 		ImageURL:     createdUser.ImageURL,
 		Token:        token,
 		TokenExpires: time.Now().Add(24 * time.Hour), // Example token expiry time
+		IsVerified:   createdUser.IsVerified,
 		IsDeleted:    createdUser.IsDeleted,
 	}
 
@@ -226,6 +223,54 @@ func (o *authUsecase) RegisterCustomer(email, password, confirmPassword string) 
 	if res.StatusCode != http.StatusOK {
 		o.log.Errorf("Error sending verification email: received status %v", res.StatusCode)
 		return errors.New("error sending verification email")
+	}
+
+	return nil
+}
+
+func (a *authUsecase) VerifyUserEmail(token string) error {
+
+	// Extract the user ID from the token (using your existing JWT decode logic)
+	userID, err := util.DecodeJWT(token)
+	if err != nil {
+		return fmt.Errorf("error decoding token: %w", err)
+	}
+
+	url := constant.USER_SERVICE + "/verify?token=" + token + "&user_id=" + userID
+
+	// Create the HTTP PUT request
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		a.log.Errorf("Failed to create request: %v", err)
+		return err
+	}
+
+	// Set the appropriate headers
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	res, err := client.Do(req)
+	if err != nil {
+		a.log.Errorf("Failed to verify user email: %v", err)
+		return err
+	}
+
+	defer res.Body.Close()
+
+	// Check for a successful status code
+	if res.StatusCode != http.StatusOK {
+		a.log.Errorf("Error verifying user email: received status %v", res.StatusCode)
+		return errors.New("error verifying user email")
+	}
+
+	var resp model.VerifyTokenResponse
+	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		a.log.Errorf("Failed to decode verify token response: %v", err)
+		return err
+	}
+
+	if !resp.IsValid {
+		return errors.New("invalid token")
 	}
 
 	return nil

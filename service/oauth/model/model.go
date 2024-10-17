@@ -13,6 +13,7 @@ type UpdateUserRequest struct {
 	ImageURL     string    `json:"image_url"`
 	Token        string    `json:"token"`
 	TokenExpires time.Time `json:"token_expires"`
+	IsVerified   bool      `json:"is_verified"`
 	IsDeleted    bool      `json:"is_deleted"`
 }
 type CreateUserRequest struct {
@@ -32,6 +33,7 @@ type User struct {
 	UpdatedAt    time.Time `gorm:"type:timestamp without time zone;column:created_at;default:current_timestamp"`
 	Token        string    `gorm:"column:token"`
 	TokenExpires time.Time `gorm:"column:token_expires"`
+	IsVerified   bool      `gorm:"column:is_verified;default:false"`
 	IsDeleted    bool      `gorm:"column:is_deleted;default:false"`
 }
 

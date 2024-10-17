@@ -11,11 +11,31 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./script.sql:/docker-entrypoint-initdb.d/script.sql # Mount the SQL script
+      - ./script.sql:/docker-entrypoint-initdb.d/script.sql
     networks:
       - book_network
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis_service:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    networks:
+      - book_network
+
+  rabbitmq_service:
+    image: rabbitmq:management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - book_network
+    healthcheck:
+      test: [ "CMD-SHELL", "rabbitmq-diagnostics -q ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,24 +45,20 @@ services:
       context: .
       dockerfile: service/product/Dockerfile
     ports:
-      - "50051:50051"
+      - "8081:8081"
     environment:
       CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
     depends_on:
       postgres_service:
         condition: service_healthy
-    networks:
-      - book_network
-
-  api_gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    depends_on:
-      - book_service
-      - user_service
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
     networks:
       - book_network
 

@@ -33,6 +33,7 @@ type IOrderUsecase interface {
 	GetOrderList(ctx context.Context, req *model.GetOrdersRequest) (*util.PaginatedList[model.GetOrderResponse], error)
 	ProcessOrder(ctx context.Context, userId, cartId, CourierID, VoucherID int64, shipAddress, paymentMethod string, freight float64) (*model.GetOrderResponse, error)
 	ProcessPayment(ctx context.Context, order *model.GetOrderResponse, paymentMethod string) (string, error)
+	PlaceOrder(ctx context.Context, userId, cartId, CourierID, VoucherID int64, paymentMethod, shipAddress string, freight float64) (string, error)
 }
 
 func NewOrderUsecase(orderRepo repository.IOrderRepository, log *logrus.Logger) IOrderUsecase {
@@ -250,7 +251,6 @@ func (pu *orderUsecase) GetOrderList(ctx context.Context, req *model.GetOrdersRe
 }
 
 func (o *orderUsecase) PlaceOrder(ctx context.Context, userId, cartId, CourierID, VoucherID int64, paymentMethod, shipAddress string, freight float64) (string, error) {
-
 	order, err := o.ProcessOrder(ctx, userId, cartId, CourierID, VoucherID, shipAddress, paymentMethod, freight)
 	if err != nil {
 		return "", err
@@ -260,15 +260,24 @@ func (o *orderUsecase) PlaceOrder(ctx context.Context, userId, cartId, CourierID
 		return "", err
 	}
 
-	err = rabbitmq.PublishInventoryUpdateEvent(userId, cartId)
-	if err != nil {
-		return "", err
-	}
+	// Use a channel to capture errors from goroutines
+	errChan := make(chan error, 2)
 
-	// Publish Notification Event
-	err = rabbitmq.PublishOrderNotificationEvent(order.OrderID, paymentURL)
-	if err != nil {
-		return "", err
+	// Publish Inventory Update Event in a goroutine
+	go func() {
+		errChan <- rabbitmq.PublishInventoryUpdateEvent(userId, cartId)
+	}()
+
+	// Publish Order Notification Event in a goroutine
+	go func() {
+		errChan <- rabbitmq.PublishOrderNotificationEvent(order.OrderID, paymentURL)
+	}()
+
+	// Wait for both goroutines to finish and check for errors
+	for i := 0; i < 2; i++ {
+		if err := <-errChan; err != nil {
+			return "", err
+		}
 	}
 
 	return paymentURL, nil
@@ -288,7 +297,7 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 	}
 
 	url := constant.CART_ITEM_SERVICE
-	req, err := http.NewRequest("GET", url, bytes.NewBuffer(cartItemData))
+	req, err := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(cartItemData))
 	if err != nil {
 		o.log.Errorf("Failed to create cart item request: %v", err)
 		return &model.GetOrderResponse{}, err
@@ -319,7 +328,7 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 	for _, product := range productsList {
 		if _, exists := productDetails[product.ProductID]; !exists {
 			url := constant.PRODUCT_SERVICE + fmt.Sprintf("/%d", product.ProductID)
-			req, err := http.NewRequest("GET", url, nil)
+			req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 			if err != nil {
 				o.log.Errorf("Failed to create product request: %v", err)
 				return &model.GetOrderResponse{}, err
@@ -352,7 +361,7 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 
 	// Fetch voucher details
 	url = constant.VOUCHER_SERVICE + fmt.Sprintf("/%d", VoucherID)
-	req, err = http.NewRequest("GET", url, nil)
+	req, err = http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		o.log.Errorf("Failed to create voucher request: %v", err)
 		return &model.GetOrderResponse{}, err
@@ -405,7 +414,7 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 	}
 
 	url = constant.VOUCHER_SERVICE + "/check-usage"
-	req, err = http.NewRequest("POST", url, bytes.NewBuffer(checkVoucherUsageRequestData))
+	req, err = http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(checkVoucherUsageRequestData))
 	if err != nil {
 		o.log.Errorf("Failed to create check voucher usage request: %v", err)
 		return &model.GetOrderResponse{}, err
@@ -483,7 +492,7 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 		}
 
 		url = constant.ORDER_DETAILS_SERVICE
-		req, err = http.NewRequest("POST", url, bytes.NewBuffer(orderDetailsData))
+		req, err = http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(orderDetailsData))
 		if err != nil {
 			o.log.Errorf("Failed to create order detail request: %v", err)
 			return &model.GetOrderResponse{}, err
@@ -520,7 +529,7 @@ func (o *orderUsecase) ProcessPayment(ctx context.Context, order *model.GetOrder
 	}
 
 	url := constant.PAYMENT_SERVICE
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(paymentRequest))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(paymentRequest))
 	if err != nil {
 		o.log.Errorf("Failed to create request: %v", err)
 		return "", err
@@ -537,83 +546,85 @@ func (o *orderUsecase) ProcessPayment(ctx context.Context, order *model.GetOrder
 
 	// Check if the request was successful
 	if resp.StatusCode != http.StatusOK {
-		o.log.Errorf("order detail service returned non-OK status: %d", resp.StatusCode)
-		return "", fmt.Errorf("order detail service returned non-OK status: %d", resp.StatusCode)
+		o.log.Errorf("Payment service returned non-OK status: %d", resp.StatusCode)
+		return "", fmt.Errorf("Payment service returned non-OK status: %d", resp.StatusCode)
 	}
 
 	if paymentMethod == constant.PAYMENT_METHOD_MOMO {
-		// Create the payment record
-		url := constant.MOMO_SERVICE + "?amount=" + fmt.Sprintf("%.2f", order.TotalAmount) + "&orderID=" + fmt.Sprintf("%d", order.OrderID)
-
-		req, err := http.NewRequest("POST", url, nil)
-		if err != nil {
-			o.log.Errorf("Failed to create request: %v", err)
-			return "", err
-		}
-
-		// Set the context and execute the request
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			o.log.Errorf("Failed to execute request: %v", err)
-			return "", err
-		}
-		defer resp.Body.Close()
-
-		// Check if the request was successful
-		if resp.StatusCode != http.StatusOK {
-			o.log.Errorf("momo service returned non-OK status: %d", resp.StatusCode)
-			return "", fmt.Errorf("momo service returned non-OK status: %d", resp.StatusCode)
-		}
-
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			o.log.Errorf("Failed to read response body: %v", err)
-			return "", err
-		}
-		returnUrl := string(bodyBytes)
-
-		o.log.Infof("Received MoMo URL: %s", returnUrl)
-
-		return returnUrl, nil
+		return o.processMomoPayment(ctx, order)
 	}
 
 	if paymentMethod == constant.PAYMENT_METHOD_VNPAY {
-
-		url := constant.VNPAY_SERVICE + "?amount=" + fmt.Sprintf("%.2f", order.TotalAmount) + "&orderID=" + fmt.Sprintf("%d", order.OrderID)
-
-		req, err := http.NewRequest("POST", url, nil)
-		if err != nil {
-			o.log.Errorf("Failed to create request: %v", err)
-			return "", err
-		}
-
-		// Set the context and execute the request
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			o.log.Errorf("Failed to execute request: %v", err)
-			return "", err
-		}
-		defer resp.Body.Close()
-
-		// Check if the request was successful
-		if resp.StatusCode != http.StatusOK {
-			o.log.Errorf("vnpay service returned non-OK status: %d", resp.StatusCode)
-			return "", fmt.Errorf("vnpay service returned non-OK status: %d", resp.StatusCode)
-		}
-
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			o.log.Errorf("Failed to read response body: %v", err)
-			return "", err
-		}
-		returnUrl := string(bodyBytes)
-
-		o.log.Infof("Received VnPay URL: %s", returnUrl)
-
-		return returnUrl, nil
+		return o.processVnPayPayment(ctx, order)
 	}
 
 	return "", nil
+}
+
+func (o *orderUsecase) processMomoPayment(ctx context.Context, order *model.GetOrderResponse) (string, error) {
+	url := constant.MOMO_SERVICE + "?amount=" + fmt.Sprintf("%.2f", order.TotalAmount) + "&orderID=" + fmt.Sprintf("%d", order.OrderID)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		o.log.Errorf("Failed to create request: %v", err)
+		return "", err
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		o.log.Errorf("Failed to execute request: %v", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		o.log.Errorf("Momo service returned non-OK status: %d", resp.StatusCode)
+		return "", fmt.Errorf("Momo service returned non-OK status: %d", resp.StatusCode)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		o.log.Errorf("Failed to read response body: %v", err)
+		return "", err
+	}
+	returnUrl := string(bodyBytes)
+
+	o.log.Infof("Received MoMo URL: %s", returnUrl)
+
+	return returnUrl, nil
+}
+
+func (o *orderUsecase) processVnPayPayment(ctx context.Context, order *model.GetOrderResponse) (string, error) {
+	url := constant.VNPAY_SERVICE + "?amount=" + fmt.Sprintf("%.2f", order.TotalAmount) + "&orderID=" + fmt.Sprintf("%d", order.OrderID)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		o.log.Errorf("Failed to create request: %v", err)
+		return "", err
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		o.log.Errorf("Failed to execute request: %v", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		o.log.Errorf("VnPay service returned non-OK status: %d", resp.StatusCode)
+		return "", fmt.Errorf("VnPay service returned non-OK status: %d", resp.StatusCode)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		o.log.Errorf("Failed to read response body: %v", err)
+		return "", err
+	}
+	returnUrl := string(bodyBytes)
+
+	o.log.Infof("Received VnPay URL: %s", returnUrl)
+
+	return returnUrl, nil
 }

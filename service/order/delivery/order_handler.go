@@ -162,3 +162,30 @@ func GetPaginatedOrder(c *gin.Context) {
 
 	c.JSON(200, orders)
 }
+
+func PlaceOrder(c *gin.Context) {
+	module := dependency_injection.NewOrderUsecaseProvider()
+
+	var req model.PlaceOrderRequest
+	err := c.BindJSON(&req)
+	if err != nil {
+		logrus.Error(err)
+		c.JSON(400, gin.H{
+			"error": "Bad Request",
+		})
+		return
+	}
+
+	url, err := module.PlaceOrder(c, req.UserId, req.CartId, req.CourierID, req.VoucherID, req.PaymentMethod, req.ShipAddress, req.Freight)
+	if err != nil {
+		logrus.Error(err)
+		c.JSON(500, gin.H{
+			"error": "Internal Server Error",
+		})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"url": url,
+	})
+}

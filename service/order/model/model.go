@@ -5,6 +5,16 @@ import (
 	"time"
 )
 
+type PlaceOrderRequest struct {
+	UserId        int64   `json:"user_id"`
+	CartId        int64   `json:"cart_id"`
+	CourierID     int64   `json:"courier_id"`
+	VoucherID     int64   `json:"voucher_id"`
+	PaymentMethod string  `json:"payment_method"`
+	ShipAddress   string  `json:"ship_address"`
+	Freight       float64 `json:"freight"`
+}
+
 type SendOrderDetailsRequest struct {
 	Customer     User          `json:"user" binding:"required"`
 	Order        Order         `json:"order" binding:"required"`
@@ -27,6 +37,7 @@ type GetUserResponse struct {
 	UpdatedAt    string `json:"updated_at"`
 	Token        string `json:"token"`
 	TokenExpires string `json:"token_expires"`
+	IsVerified   bool   `json:"is_verified"`
 	IsDeleted    bool   `json:"is_deleted"`
 }
 type GetUserRequest struct {
@@ -195,6 +206,7 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 	Token        string    `json:"token"`
 	TokenExpires time.Time `json:"token_expires"`
+	IsVerified   bool      `json:"is_verified"`
 	IsDeleted    bool      `json:"is_deleted"`
 }
 

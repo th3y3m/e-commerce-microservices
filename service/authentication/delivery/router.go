@@ -11,6 +11,7 @@ func RegisterHandlers() *gin.Engine {
 	{
 		authen.POST("/login", Login)
 		authen.POST("/register", Register)
+		authen.GET("/verify-email", VerifyUserEmail)
 	}
 
 	return r

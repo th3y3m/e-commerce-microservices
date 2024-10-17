@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"th3y3m/e-commerce-microservices/service/user/model"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -25,6 +26,7 @@ type IUserRepository interface {
 	Delete(ctx context.Context, userID int64) error
 	getQuerySearch(db *gorm.DB, req *model.GetUsersRequest) *gorm.DB
 	GetList(ctx context.Context, req *model.GetUsersRequest) ([]*User, error)
+	VerifyToken(ctx context.Context, token string, userID int64) (bool, error)
 }
 
 func NewUserRepository(db *gorm.DB, redis *redis.Client, log *logrus.Logger) IUserRepository {
@@ -235,4 +237,23 @@ func (pr *userRepository) GetList(ctx context.Context, req *model.GetUsersReques
 
 	pr.log.Infof("Fetched %d users", len(users))
 	return users, nil
+}
+
+func (pr *userRepository) VerifyToken(ctx context.Context, token string, userID int64) (bool, error) {
+	pr.log.Infof("Verifying token for user: %d", userID)
+
+	var user User
+	if err := pr.db.WithContext(ctx).Where("user_id = ? AND token = ?", userID, token).First(&user).Error; err != nil {
+		pr.log.Errorf("Error fetching user with matching token from database: %v", err)
+		return false, fmt.Errorf("invalid user or token")
+	}
+
+	// Check if the token has expired
+	if user.TokenExpires.Before(time.Now()) {
+		pr.log.Errorf("Token has expired for user: %d", userID)
+		return false, fmt.Errorf("token has expired")
+	}
+
+	pr.log.Infof("Token successfully verified for user: %d", userID)
+	return true, nil
 }

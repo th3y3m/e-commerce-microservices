@@ -14,6 +14,7 @@ func RegisterHandlers() *gin.Engine {
 		user.POST("", CreateUser)
 		user.PUT("", UpdateUser)
 		user.DELETE("", DeleteUser)
+		user.POST("/verify", VerifyToken)
 	}
 
 	return r

@@ -50,6 +50,7 @@ type User struct {
 	UpdatedAt    time.Time `gorm:"type:timestamp without time zone;column:created_at;default:current_timestamp"`
 	Token        string    `gorm:"column:token"`
 	TokenExpires time.Time `gorm:"column:token_expires"`
+	IsVerified   bool      `gorm:"column:is_verified"`
 	IsDeleted    bool      `gorm:"column:is_deleted;default:false"`
 }
 

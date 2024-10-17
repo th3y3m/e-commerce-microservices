@@ -24,6 +24,7 @@ type IUserUsecase interface {
 	UpdateUser(ctx context.Context, rep *model.UpdateUserRequest) (*model.GetUserResponse, error)
 	DeleteUser(ctx context.Context, req *model.DeleteUserRequest) error
 	GetUserList(ctx context.Context, req *model.GetUsersRequest) (*util.PaginatedList[model.GetUserResponse], error)
+	VerifyToken(ctx context.Context, token string, userID int64) (bool, error)
 }
 
 func NewUserUsecase(userRepo repository.IUserRepository, log *logrus.Logger) IUserUsecase {
@@ -53,6 +54,7 @@ func (pu *userUsecase) GetUser(ctx context.Context, req *model.GetUserRequest) (
 		ImageURL:     user.ImageURL,
 		Token:        user.Token,
 		IsDeleted:    user.IsDeleted,
+		IsVerified:   user.IsVerified,
 		TokenExpires: user.TokenExpires.Format(tsCreateTimeLayout),
 		CreatedAt:    user.CreatedAt.Format(tsCreateTimeLayout),
 		UpdatedAt:    user.UpdatedAt.Format(tsCreateTimeLayout),
@@ -80,6 +82,7 @@ func (pu *userUsecase) GetAllUsers(ctx context.Context) ([]*model.GetUserRespons
 			ImageURL:     user.ImageURL,
 			Token:        user.Token,
 			IsDeleted:    user.IsDeleted,
+			IsVerified:   user.IsVerified,
 			TokenExpires: user.TokenExpires.Format(tsCreateTimeLayout),
 			CreatedAt:    user.CreatedAt.Format(tsCreateTimeLayout),
 			UpdatedAt:    user.UpdatedAt.Format(tsCreateTimeLayout),
@@ -115,6 +118,7 @@ func (pu *userUsecase) CreateUser(ctx context.Context, user *model.CreateUserReq
 		ImageURL:     createdUser.ImageURL,
 		Token:        createdUser.Token,
 		IsDeleted:    createdUser.IsDeleted,
+		IsVerified:   createdUser.IsVerified,
 		TokenExpires: createdUser.TokenExpires.Format(tsCreateTimeLayout),
 		CreatedAt:    createdUser.CreatedAt.Format(tsCreateTimeLayout),
 		UpdatedAt:    createdUser.UpdatedAt.Format(tsCreateTimeLayout),
@@ -160,6 +164,7 @@ func (pu *userUsecase) UpdateUser(ctx context.Context, rep *model.UpdateUserRequ
 	user.ImageURL = rep.ImageURL
 	user.UpdatedAt = time.Now()
 	user.IsDeleted = rep.IsDeleted
+	user.IsVerified = rep.IsVerified
 
 	updatedUser, err := pu.userRepo.Update(ctx, user)
 	if err != nil {
@@ -179,6 +184,7 @@ func (pu *userUsecase) UpdateUser(ctx context.Context, rep *model.UpdateUserRequ
 		ImageURL:     updatedUser.ImageURL,
 		Token:        updatedUser.Token,
 		IsDeleted:    updatedUser.IsDeleted,
+		IsVerified:   updatedUser.IsVerified,
 		TokenExpires: updatedUser.TokenExpires.Format(tsCreateTimeLayout),
 		CreatedAt:    updatedUser.CreatedAt.Format(tsCreateTimeLayout),
 		UpdatedAt:    updatedUser.UpdatedAt.Format(tsCreateTimeLayout),
@@ -206,6 +212,7 @@ func (pu *userUsecase) GetUserList(ctx context.Context, req *model.GetUsersReque
 			ImageURL:     user.ImageURL,
 			Token:        user.Token,
 			IsDeleted:    user.IsDeleted,
+			IsVerified:   user.IsVerified,
 			TokenExpires: user.TokenExpires.Format(tsCreateTimeLayout),
 			CreatedAt:    user.CreatedAt.Format(tsCreateTimeLayout),
 			UpdatedAt:    user.UpdatedAt.Format(tsCreateTimeLayout),
@@ -224,4 +231,42 @@ func (pu *userUsecase) GetUserList(ctx context.Context, req *model.GetUsersReque
 
 	pu.log.Infof("Fetched %d users", len(userResponses))
 	return list, nil
+}
+
+func (pu *userUsecase) VerifyToken(ctx context.Context, token string, userID int64) (bool, error) {
+	pu.log.Infof("Verifying token: %s for user: %d", token, userID)
+	isValid, err := pu.userRepo.VerifyToken(ctx, token, userID)
+	if err != nil {
+		pu.log.Errorf("Error verifying token: %v", err)
+		return false, err
+	}
+
+	user, err := pu.userRepo.Get(ctx, &userID, "")
+	if err != nil {
+		pu.log.Errorf("Error fetching user for token verification: %v", err)
+		return false, err
+	}
+
+	if !isValid {
+		user.Token = ""
+		user.TokenExpires = time.Time{}
+		user.IsVerified = false
+
+		_, err = pu.userRepo.Update(ctx, user)
+		if err != nil {
+			pu.log.Errorf("Error updating user after token verification: %v", err)
+			return false, err
+		}
+	} else {
+		user.IsVerified = true
+
+		_, err = pu.userRepo.Update(ctx, user)
+		if err != nil {
+			pu.log.Errorf("Error updating user after token verification: %v", err)
+			return false, err
+		}
+	}
+
+	pu.log.Infof("Token is valid: %t", isValid)
+	return isValid, nil
 }

@@ -43,3 +43,21 @@ func Register(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Verify your email to complete registration"})
 }
+
+func VerifyUserEmail(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "token is required"})
+		return
+	}
+
+	module := dependency_injection.NewAuthUsecaseProvider()
+
+	err := module.VerifyUserEmail(token)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Email verified successfully"})
+}

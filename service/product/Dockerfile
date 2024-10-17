@@ -15,7 +15,7 @@ COPY . .
 WORKDIR /app/service/product
 
 # Build the Go application
-RUN go build -o service main.go
+RUN go build -o product main.go
 
 # Command to run the application
-CMD ["./service/product"]
+CMD ["./product"]
