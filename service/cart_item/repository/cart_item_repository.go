@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -55,9 +56,9 @@ func (pr *cartItemRepository) Get(ctx context.Context, cartID, productID int64) 
 		return nil, result.Error
 	}
 
-	// Save to cache
+	// Save to cache with expiration
 	cartItemJSON, _ := json.Marshal(cartItem)
-	pr.redis.Set(ctx, cacheKey, cartItemJSON, 0)
+	pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour)
 	pr.log.Infof("CartItem saved to cache: %d:%d", cartID, productID)
 
 	return &cartItem, nil
@@ -72,13 +73,14 @@ func (pr *cartItemRepository) Create(ctx context.Context, cartItem *CartItem) (*
 	}
 	cacheKey := fmt.Sprintf("cartItem:%d:%d", cartItem.CartID, cartItem.ProductID)
 
-	// Save to cache
+	// Save to cache with expiration
 	cartItemJSON, _ := json.Marshal(cartItem)
-	pr.redis.Set(ctx, cacheKey, cartItemJSON, 0)
+	pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour)
 	pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
 
 	return cartItem, nil
 }
+
 func (pr *cartItemRepository) Update(ctx context.Context, cartItem *CartItem) (*CartItem, error) {
 	pr.log.Infof("Updating cartItem: %+v", cartItem)
 	result := pr.db.WithContext(ctx).Save(cartItem)
@@ -88,9 +90,9 @@ func (pr *cartItemRepository) Update(ctx context.Context, cartItem *CartItem) (*
 	}
 	cacheKey := fmt.Sprintf("cartItem:%d:%d", cartItem.CartID, cartItem.ProductID)
 
-	// Save to cache
+	// Save to cache with expiration
 	cartItemJSON, _ := json.Marshal(cartItem)
-	pr.redis.Set(ctx, cacheKey, cartItemJSON, 0)
+	pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour)
 	pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
 
 	return cartItem, nil
@@ -117,16 +119,16 @@ func (pr *cartItemRepository) Delete(ctx context.Context, cartID, productID int6
 func (pr *cartItemRepository) GetList(ctx context.Context, cartID, productID *int64) ([]*CartItem, error) {
 	pr.log.Info("Fetching cartItems")
 	var cartItems []*CartItem
-	var cacheKey string
+	cacheKey := "cartItems"
 
 	// Build the query
 	query := pr.db.WithContext(ctx)
 	if cartID != nil {
-		cacheKey = fmt.Sprintf("cartItems:cartID:%d", *cartID)
+		cacheKey = fmt.Sprintf("%s:cartID:%d", cacheKey, *cartID)
 		query = query.Where("cart_id = ?", *cartID)
 	}
 	if productID != nil {
-		cacheKey = fmt.Sprintf("cartItems:productID:%d", *productID)
+		cacheKey = fmt.Sprintf("%s:productID:%d", cacheKey, *productID)
 		query = query.Where("product_id = ?", *productID)
 	}
 
@@ -146,9 +148,9 @@ func (pr *cartItemRepository) GetList(ctx context.Context, cartID, productID *in
 		return nil, result.Error
 	}
 
-	// Save to cache
+	// Save to cache with expiration
 	cartItemsJSON, _ := json.Marshal(cartItems)
-	pr.redis.Set(ctx, cacheKey, cartItemsJSON, 0)
+	pr.redis.Set(ctx, cacheKey, cartItemsJSON, time.Hour)
 	pr.log.Info("CartItems saved to cache")
 
 	return cartItems, nil
@@ -183,9 +185,11 @@ func (pr *cartItemRepository) UpdateOrCreate(ctx context.Context, cartItem CartI
 		}
 	}
 
-	// Save to cache
+	// Save to cache with expiration
 	cartItemJSON, _ := json.Marshal(cartItem)
-	pr.redis.Set(ctx, cacheKey, cartItemJSON, 0)
+	pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour)
+	pr.redis.Del(ctx, fmt.Sprintf("cartItems:cartID:%d", cartItem.CartID))
+	pr.redis.Del(ctx, fmt.Sprintf("cartItems:productID:%d", cartItem.ProductID))
 	pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
 
 	pr.log.Infof("Successfully updated or created cart item with cart ID: %d and product ID: %d", cartItem.CartID, cartItem.ProductID)

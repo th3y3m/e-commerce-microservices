@@ -142,6 +142,7 @@ type User struct {
 	Address      string    `gorm:"column:address"`
 	Role         string    `gorm:"column:role"`
 	ImageURL     string    `gorm:"column:image_url"`
+	Provider     string    `gorm:"column:provider"`
 	CreatedAt    time.Time `gorm:"type:timestamp without time zone;column:created_at;default:current_timestamp"`
 	UpdatedAt    time.Time `gorm:"type:timestamp without time zone;column:created_at;default:current_timestamp"`
 	Token        string    `gorm:"column:token"`

@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"th3y3m/e-commerce-microservices/pkg/constant"
 	"th3y3m/e-commerce-microservices/pkg/util"
 	"th3y3m/e-commerce-microservices/service/user/model"
 	"th3y3m/e-commerce-microservices/service/user/repository"
@@ -52,6 +53,7 @@ func (pu *userUsecase) GetUser(ctx context.Context, req *model.GetUserRequest) (
 		Address:      user.Address,
 		Role:         user.Role,
 		ImageURL:     user.ImageURL,
+		Provider:     user.Provider,
 		Token:        user.Token,
 		IsDeleted:    user.IsDeleted,
 		IsVerified:   user.IsVerified,
@@ -80,6 +82,7 @@ func (pu *userUsecase) GetAllUsers(ctx context.Context) ([]*model.GetUserRespons
 			Address:      user.Address,
 			Role:         user.Role,
 			ImageURL:     user.ImageURL,
+			Provider:     user.Provider,
 			Token:        user.Token,
 			IsDeleted:    user.IsDeleted,
 			IsVerified:   user.IsVerified,
@@ -98,6 +101,26 @@ func (pu *userUsecase) CreateUser(ctx context.Context, user *model.CreateUserReq
 	userData := repository.User{
 		Email:        user.Email,
 		PasswordHash: user.Password,
+		Role:         user.Role,
+		ImageURL:     user.ImageURL,
+		Provider:     user.Provider,
+		IsVerified:   *user.IsVerified,
+	}
+
+	if user.Role == "" {
+		userData.Role = "Customer"
+	}
+
+	if user.ImageURL == "" {
+		userData.ImageURL = constant.DEFAULT_USER_IMAGE
+	}
+
+	if user.Provider == "" {
+		userData.Provider = "System"
+	}
+
+	if user.IsVerified == nil {
+		userData.IsVerified = false
 	}
 
 	createdUser, err := pu.userRepo.Create(ctx, &userData)
@@ -116,6 +139,7 @@ func (pu *userUsecase) CreateUser(ctx context.Context, user *model.CreateUserReq
 		Address:      createdUser.Address,
 		Role:         createdUser.Role,
 		ImageURL:     createdUser.ImageURL,
+		Provider:     createdUser.Provider,
 		Token:        createdUser.Token,
 		IsDeleted:    createdUser.IsDeleted,
 		IsVerified:   createdUser.IsVerified,
@@ -183,6 +207,7 @@ func (pu *userUsecase) UpdateUser(ctx context.Context, rep *model.UpdateUserRequ
 		Role:         updatedUser.Role,
 		ImageURL:     updatedUser.ImageURL,
 		Token:        updatedUser.Token,
+		Provider:     updatedUser.Provider,
 		IsDeleted:    updatedUser.IsDeleted,
 		IsVerified:   updatedUser.IsVerified,
 		TokenExpires: updatedUser.TokenExpires.Format(tsCreateTimeLayout),
@@ -210,6 +235,7 @@ func (pu *userUsecase) GetUserList(ctx context.Context, req *model.GetUsersReque
 			Address:      user.Address,
 			Role:         user.Role,
 			ImageURL:     user.ImageURL,
+			Provider:     user.Provider,
 			Token:        user.Token,
 			IsDeleted:    user.IsDeleted,
 			IsVerified:   user.IsVerified,

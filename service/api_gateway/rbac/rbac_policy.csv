@@ -1,0 +1,20 @@
+# Policy: role,object,action
+p, admin, *, (GET|POST|PUT|DELETE)
+
+p,seller,/api/users/:id,GET
+p,seller,/api/products,(GET|POST|PUT|DELETE)
+p,seller,/api/products/*,(GET|POST|PUT|DELETE)
+p,seller,/api/categories,GET
+p,seller,/api/categories/:id,GET
+p,seller,/api/couriers,GET
+p,seller,/api/couriers/:id,GET
+
+p,customer,/api/products,GET
+p,customer,/api/products/:product_id,GET
+p,customer,/api/orders,POST
+p,customer,/api/users/:user_id,GET
+p,customer,/api/categories,GET
+p,customer,/api/categories/:id,GET
+p,customer,/api/couriers,GET
+p,customer,/api/couriers/:id,GET
+

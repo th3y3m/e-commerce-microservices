@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS public.users
     address text COLLATE pg_catalog."default",
     role text COLLATE pg_catalog."default",
     image_url text COLLATE pg_catalog."default",
+    provider text COLLATE pg_catalog."default",
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     token text COLLATE pg_catalog."default",
     token_expires timestamp with time zone,

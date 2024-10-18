@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 	"strings"
-	"th3y3m/e-commerce-microservices/service/mail/delivery"
+	"th3y3m/e-commerce-microservices/service/authentication/delivery"
 
 	"github.com/spf13/viper"
 )
@@ -27,8 +27,8 @@ func main() {
 
 	r := delivery.RegisterHandlers()
 
-	log.Println("Starting server on port 8096")
-	if err := r.Run(":8096"); err != nil {
+	log.Println("Starting server on port 8099")
+	if err := r.Run(":8099"); err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}
 }

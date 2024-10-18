@@ -21,6 +21,7 @@ type GetUserResponse struct {
 	Address      string `json:"address"`
 	Role         string `json:"role"`
 	ImageURL     string `json:"image_url"`
+	Provider     string `json:"provider"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
 	Token        string `json:"token"`
@@ -57,6 +58,7 @@ type User struct {
 	Address      string    `json:"address"`
 	Role         string    `json:"role"`
 	ImageURL     string    `json:"image_url"`
+	Provider     string    `json:"provider"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Token        string    `json:"token"`

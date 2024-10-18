@@ -2,25 +2,33 @@ package logging
 
 import (
 	"log"
+	"net/http"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
-func RequestLogger() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		startTime := time.Now()
+func LogRequests(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 
-		// Log request details
-		log.Printf("Incoming request: %s %s from %s",
-			c.Request.Method, c.Request.RequestURI, c.ClientIP())
+		// Create a response recorder to capture the status code
+		recorder := &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
 
-		// Continue to the next handler
-		c.Next()
+		// Forward the request
+		next.ServeHTTP(recorder, r)
 
-		// Log response details after handling
-		latency := time.Since(startTime)
-		log.Printf("Response: %d, latency: %v, path: %s",
-			c.Writer.Status(), latency, c.Request.RequestURI)
+		// Log the request details
+		log.Printf("Method: %s, Path: %s, Status: %d, Duration: %v",
+			r.Method, r.URL.Path, recorder.statusCode, time.Since(start))
 	}
+}
+
+// responseRecorder is used to capture the status code
+type responseRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rec *responseRecorder) WriteHeader(code int) {
+	rec.statusCode = code
+	rec.ResponseWriter.WriteHeader(code)
 }

@@ -15,16 +15,26 @@ import (
 	"github.com/spf13/viper"
 )
 
-// init initializes the OAuth providers and sets up the session store.
+// JWTResponse represents the response containing a JWT token.
 type JWTResponse struct {
 	Token string `json:"token"`
 }
 
-func init() {
+// InitializeOAuth initializes the OAuth providers and sets up the session store.
+func InitializeOAuth() {
 	// Set up environment variables
 	clientID := viper.GetString("GOOGLE_CLIENT_ID")
 	clientSecret := viper.GetString("GOOGLE_CLIENT_SECRET")
 	facebookID, facebookSecret := viper.GetString("FACEBOOK_CLIENT_ID"), viper.GetString("FACEBOOK_CLIENT_SECRET")
+
+	// Check if client ID and secret are set
+	if clientID == "" || clientSecret == "" {
+		log.Fatal("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variables are not set")
+	}
+
+	if facebookID == "" || facebookSecret == "" {
+		log.Fatal("FACEBOOK_CLIENT_ID or FACEBOOK_CLIENT_SECRET environment variables are not set")
+	}
 
 	sessionSecret := viper.GetString("SESSION_SECRET")
 
@@ -36,7 +46,7 @@ func init() {
 	// Set SESSION_SECRET for Gothic
 	os.Setenv("SESSION_SECRET", sessionSecret)
 
-	// Initialize Goth with the Google provider
+	// Initialize Goth with the Google and Facebook providers
 	goth.UseProviders(
 		google.New(clientID, clientSecret, "http://localhost:8080/auth/google/callback"),
 		facebook.New(facebookID, facebookSecret, "http://localhost:8080/auth/facebook/callback"),
@@ -64,7 +74,7 @@ func GoogleCallback(c *gin.Context) {
 	service := dependency_injection.NewOAuthUsecaseProvider()
 
 	// Handle Google user and generate JWT token
-	token, err := service.HandleOAuthUser(user)
+	token, err := service.HandleOAuthUserGoogle(user)
 	if err != nil {
 		log.Printf("Error handling Google user: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to handle Google user"})
@@ -100,7 +110,7 @@ func FacebookCallback(c *gin.Context) {
 	service := dependency_injection.NewOAuthUsecaseProvider()
 
 	// Handle Facebook user and generate JWT token
-	token, err := service.HandleOAuthUser(user)
+	token, err := service.HandleOAuthUserFacebook(user)
 	if err != nil {
 		log.Printf("Error handling Facebook user: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to handle Facebook user"})

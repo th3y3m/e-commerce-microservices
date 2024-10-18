@@ -70,3 +70,15 @@ type UpdateCartRequest struct {
 	CartID    int64 `json:"cart_id"`
 	IsDeleted bool  `json:"is_deleted"`
 }
+
+type RemoveProductFromShoppingCartRequest struct {
+	UserID    int64 `json:"user_id"`
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
+}
+
+type AddProductToShoppingCartRequest struct {
+	UserID    int64 `json:"user_id"`
+	ProductID int64 `json:"product_id"`
+	Quantity  int   `json:"quantity"`
+}

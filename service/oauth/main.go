@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 	"strings"
-	"th3y3m/e-commerce-microservices/service/mail/delivery"
+	"th3y3m/e-commerce-microservices/service/oauth/delivery"
 
 	"github.com/spf13/viper"
 )
@@ -24,6 +24,8 @@ func main() {
 			_ = os.Setenv(strings.ToUpper(env), viper.GetString(env))
 		}
 	}
+
+	delivery.InitializeOAuth()
 
 	r := delivery.RegisterHandlers()
 

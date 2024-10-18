@@ -4,9 +4,9 @@ services:
   postgres_service:
     image: postgres:latest
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 12345
-      POSTGRES_DB: ECommerceDb
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
@@ -15,7 +15,7 @@ services:
     networks:
       - e_commerce_network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -47,7 +47,7 @@ services:
     ports:
       - "8081:8081"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -62,14 +62,44 @@ services:
     networks:
       - e_commerce_network
 
+  api_gateway_service:
+    build:
+      context: .
+      dockerfile: service/api_gateway/Dockerfile
+    ports:
+      - "9000:9000"
+    depends_on:
+      - product_service
+      - authentication_service
+      - mail_service
+      - cart_service
+      - cart_item_service
+      - category_service
+      - courier_service
+      - discount_service
+      - freight_rate_service
+      - momo_service
+      - news_service
+      - oauth_service
+      - order_service
+      - order_detail_service
+      - payment_service
+      - product_discount_service
+      - review_service
+      - user_service
+      - vnpay_service
+      - voucher_service
+    networks:
+      - e_commerce_network
+
   authentication_service:
     build:
       context: .
       dockerfile: service/authentication/Dockerfile
     ports:
-      - "8081:8081"
+      - "8099:8099"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -89,9 +119,9 @@ services:
       context: .
       dockerfile: service/mail/Dockerfile
     ports:
-      - "8081:8081"
+      - "8096:8096"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -111,9 +141,9 @@ services:
       context: .
       dockerfile: service/cart/Dockerfile
     ports:
-      - "8081:8081"
+      - "8085:8085"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -133,9 +163,9 @@ services:
       context: .
       dockerfile: service/cart_item/Dockerfile
     ports:
-      - "8081:8081"
+      - "8084:8084"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -155,9 +185,9 @@ services:
       context: .
       dockerfile: service/category/Dockerfile
     ports:
-      - "8081:8081"
+      - "8086:8086"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -177,9 +207,9 @@ services:
       context: .
       dockerfile: service/courier/Dockerfile
     ports:
-      - "8081:8081"
+      - "8087:8087"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -199,9 +229,9 @@ services:
       context: .
       dockerfile: service/discount/Dockerfile
     ports:
-      - "8081:8081"
+      - "8088:8088"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -221,9 +251,9 @@ services:
       context: .
       dockerfile: service/freight_rate/Dockerfile
     ports:
-      - "8081:8081"
+      - "8089:8089"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -243,9 +273,9 @@ services:
       context: .
       dockerfile: service/momo/Dockerfile
     ports:
-      - "8081:8081"
+      - "8097:8097"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -265,9 +295,9 @@ services:
       context: .
       dockerfile: service/news/Dockerfile
     ports:
-      - "8081:8081"
+      - "8083:8083"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -287,9 +317,9 @@ services:
       context: .
       dockerfile: service/oauth/Dockerfile
     ports:
-      - "8081:8081"
+      - "8080:8080"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -309,9 +339,9 @@ services:
       context: .
       dockerfile: service/order/Dockerfile
     ports:
-      - "8081:8081"
+      - "8090:8090"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -331,9 +361,9 @@ services:
       context: .
       dockerfile: service/order_detail/Dockerfile
     ports:
-      - "8081:8081"
+      - "8091:8091"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -353,9 +383,9 @@ services:
       context: .
       dockerfile: service/payment/Dockerfile
     ports:
-      - "8081:8081"
+      - "8094:8094"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -375,9 +405,9 @@ services:
       context: .
       dockerfile: service/product_discount/Dockerfile
     ports:
-      - "8081:8081"
+      - "8092:8092"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -397,9 +427,9 @@ services:
       context: .
       dockerfile: service/review/Dockerfile
     ports:
-      - "8081:8081"
+      - "8093:8093"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -419,9 +449,9 @@ services:
       context: .
       dockerfile: service/user/Dockerfile
     ports:
-      - "8081:8081"
+      - "8082:8082"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -441,9 +471,9 @@ services:
       context: .
       dockerfile: service/vnpay/Dockerfile
     ports:
-      - "8081:8081"
+      - "8098:8098"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
@@ -463,9 +493,9 @@ services:
       context: .
       dockerfile: service/voucher/Dockerfile
     ports:
-      - "8081:8081"
+      - "8095:8095"
     environment:
-      CONNECTION_STRING: host=postgres_service port=5432 user=postgres password=12345 dbname=ECommerceDb sslmode=disable
+      CONNECTION_STRING: ${CONNECTION_STRING}
       REDIS_URI: ${REDIS_URI}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}

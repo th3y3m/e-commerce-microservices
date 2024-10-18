@@ -39,6 +39,7 @@ type User struct {
 	Address      string    `json:"address"`
 	Role         string    `json:"role"`
 	ImageURL     string    `json:"image_url"`
+	Provider     string    `json:"provider"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Token        string    `json:"token"`
@@ -49,6 +50,9 @@ type User struct {
 type CreateUserRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	Role     string `json:"role"`
+	ImageURL string `json:"image_url"`
+	Provider string `json:"provider"`
 }
 type OrderDetail struct {
 	OrderID   int64   `json:"order_id"`
@@ -91,4 +95,21 @@ type SendOrderDetailsRequest struct {
 	Customer     User          `json:"customer" binding:"required"`
 	Order        Order         `json:"order" binding:"required"`
 	OrderDetails []OrderDetail `json:"order_details" binding:"required"`
+}
+type GetUserResponse struct {
+	UserID       int64  `json:"user_id"`
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+	FullName     string `json:"full_name"`
+	PhoneNumber  string `json:"phone_number"`
+	Address      string `json:"address"`
+	Role         string `json:"role"`
+	ImageURL     string `json:"image_url"`
+	Provider     string `json:"provider"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+	Token        string `json:"token"`
+	TokenExpires string `json:"token_expires"`
+	IsVerified   bool   `json:"is_verified"`
+	IsDeleted    bool   `json:"is_deleted"`
 }

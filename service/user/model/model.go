@@ -16,6 +16,7 @@ type GetUsersRequest struct {
 	PhoneNumber string      `json:"phone_number"`
 	Address     string      `json:"address"`
 	Role        string      `json:"role"`
+	Provider    string      `json:"provider"`
 	FromDate    time.Time   `json:"from_date"`
 	ToDate      time.Time   `json:"to_date"`
 	IsDeleted   *bool       `json:"is_deleted"`
@@ -35,6 +36,7 @@ type GetUserResponse struct {
 	Address      string `json:"address"`
 	Role         string `json:"role"`
 	ImageURL     string `json:"image_url"`
+	Provider     string `json:"provider"`
 	CreatedAt    string `json:"created_at"`
 	UpdatedAt    string `json:"updated_at"`
 	Token        string `json:"token"`
@@ -44,8 +46,12 @@ type GetUserResponse struct {
 }
 
 type CreateUserRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	Role       string `json:"role"`
+	ImageURL   string `json:"image_url"`
+	Provider   string `json:"provider"`
+	IsVerified *bool  `json:"is_verified"`
 }
 
 type UpdateUserRequest struct {

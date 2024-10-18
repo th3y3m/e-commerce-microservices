@@ -2,34 +2,30 @@ package middleware
 
 import (
 	"net/http"
-
-	"github.com/gin-gonic/gin"
-	"golang.org/x/time/rate"
+	"time"
 )
 
-var rateLimit = make(map[string]int)
+var rateLimiter = make(map[string]time.Time)
 
-func RateLimit() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		clientIP := c.ClientIP()
-		if rateLimit[clientIP] > 10 {
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Rate limit exceeded"})
-			c.Abort()
-			return
-		}
-		rateLimit[clientIP]++
-		c.Next()
-	}
-}
+// Basic rate limiting logic
+func RateLimit(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		clientIP := r.RemoteAddr
+		now := time.Now()
 
-func RateLimitMiddleware(limiter *rate.Limiter) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !limiter.Allow() {
-				http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		// Check if the client has made a request recently
+		if lastRequestTime, exists := rateLimiter[clientIP]; exists {
+			// Allow one request per second
+			if now.Sub(lastRequestTime) < time.Second {
+				http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 				return
 			}
-			next.ServeHTTP(w, r)
-		})
+		}
+
+		// Record current request time
+		rateLimiter[clientIP] = now
+
+		// Forward to the next handler if within the rate limit
+		next.ServeHTTP(w, r)
 	}
 }

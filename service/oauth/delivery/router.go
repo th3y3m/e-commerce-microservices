@@ -9,10 +9,10 @@ func RegisterHandlers() *gin.Engine {
 
 	auth := r.Group("/auth")
 	{
-		auth.POST("/google/callback", GoogleCallback)
-		auth.POST("/facebook/callback", FacebookCallback)
+		auth.GET("/google/callback", GoogleCallback)
+		auth.GET("/facebook/callback", FacebookCallback)
 		auth.GET("/google/login", GoogleLogin)
-		auth.GET("/google/login", FacebookLogin)
+		auth.GET("/facebook/login", FacebookLogin)
 	}
 
 	return r

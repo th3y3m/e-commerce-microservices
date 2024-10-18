@@ -13,6 +13,9 @@ func RegisterHandlers() *gin.Engine {
 		cart.POST("", CreateCart)
 		cart.PUT("", UpdateCart)
 		cart.DELETE("", DeleteCart)
+		cart.GET("/get-user-cart/:user_id", GetUserCart)
+		cart.POST("/add-item", AddProductToShoppingCart)
+		cart.PUT("/remove-item", RemoveProductFromShoppingCart)
 	}
 
 	return r

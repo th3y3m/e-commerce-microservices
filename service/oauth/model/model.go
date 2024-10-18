@@ -17,8 +17,12 @@ type UpdateUserRequest struct {
 	IsDeleted    bool      `json:"is_deleted"`
 }
 type CreateUserRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	Role       string `json:"role"`
+	ImageURL   string `json:"image_url"`
+	Provider   string `json:"provider"`
+	IsVerified bool   `json:"is_verified"`
 }
 type User struct {
 	UserID       int64     `gorm:"primaryKey;autoIncrement;column:user_id"`
@@ -29,6 +33,7 @@ type User struct {
 	Address      string    `gorm:"column:address"`
 	Role         string    `gorm:"column:role"`
 	ImageURL     string    `gorm:"column:image_url"`
+	Provider     string    `gorm:"column:provider"`
 	CreatedAt    time.Time `gorm:"type:timestamp without time zone;column:created_at;default:current_timestamp"`
 	UpdatedAt    time.Time `gorm:"type:timestamp without time zone;column:created_at;default:current_timestamp"`
 	Token        string    `gorm:"column:token"`
@@ -72,4 +77,22 @@ type Product struct {
 	CreatedAt   time.Time `gorm:"type:timestamp without time zone;column:created_at;default:current_timestamp"`
 	UpdatedAt   time.Time `gorm:"type:timestamp without time zone;column:created_at;default:current_timestamp"`
 	IsDeleted   bool      `gorm:"column:is_deleted;default:false"`
+}
+
+type GetUserResponse struct {
+	UserID       int64  `json:"user_id"`
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+	FullName     string `json:"full_name"`
+	PhoneNumber  string `json:"phone_number"`
+	Address      string `json:"address"`
+	Role         string `json:"role"`
+	ImageURL     string `json:"image_url"`
+	Provider     string `json:"provider"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+	Token        string `json:"token"`
+	TokenExpires string `json:"token_expires"`
+	IsVerified   bool   `json:"is_verified"`
+	IsDeleted    bool   `json:"is_deleted"`
 }

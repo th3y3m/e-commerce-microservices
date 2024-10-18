@@ -271,7 +271,7 @@ func (pu *cartUsecase) RemoveProductFromShoppingCart(ctx context.Context, userID
 	}
 
 	// Decode the response into cart items
-	var cartItems []model.GetCartItemResponse
+	var cartItems []*model.GetCartItemResponse
 	err = json.NewDecoder(resp.Body).Decode(&cartItems)
 	if err != nil {
 		return err

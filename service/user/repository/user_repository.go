@@ -202,6 +202,10 @@ func (pr *userRepository) getQuerySearch(db *gorm.DB, req *model.GetUsersRequest
 		db = db.Where("created_at <= ?", req.ToDate)
 	}
 
+	if req.Provider != "" {
+		db = db.Where("provider = ?", req.Provider)
+	}
+
 	return db
 }
 

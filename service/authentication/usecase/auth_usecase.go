@@ -58,7 +58,7 @@ func (o *authUsecase) Login(email, password string) (string, error) {
 	defer res.Body.Close()
 
 	// Parse the response body into a User struct
-	var user model.User
+	var user model.GetUserResponse
 	if err := json.NewDecoder(res.Body).Decode(&user); err != nil {
 		o.log.Errorf("Failed to decode user response: %v", err)
 		return "", err
@@ -85,6 +85,11 @@ func (o *authUsecase) RegisterCustomer(email, password, confirmPassword string) 
 		return errors.New("passwords do not match")
 	}
 
+	hashedPassword, err := util.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("error hashing password: %w", err)
+	}
+
 	// Call the user service to check if the user exists by their email
 	url := constant.USER_SERVICE + "/get-user"
 
@@ -108,7 +113,7 @@ func (o *authUsecase) RegisterCustomer(email, password, confirmPassword string) 
 	defer res.Body.Close()
 
 	// Parse the response body into a User struct
-	var user model.User
+	var user model.GetUserResponse
 	if err := json.NewDecoder(res.Body).Decode(&user); err != nil {
 		o.log.Errorf("Failed to decode user response: %v", err)
 		return err
@@ -121,7 +126,7 @@ func (o *authUsecase) RegisterCustomer(email, password, confirmPassword string) 
 
 	newUser := model.CreateUserRequest{
 		Email:    email,
-		Password: password,
+		Password: hashedPassword,
 	}
 
 	// Marshal the new user data to JSON
@@ -146,7 +151,7 @@ func (o *authUsecase) RegisterCustomer(email, password, confirmPassword string) 
 	}
 
 	// Decode the response body into the `createdUser` struct
-	var createdUser model.User
+	var createdUser model.GetUserResponse
 	if err := json.NewDecoder(res.Body).Decode(&createdUser); err != nil {
 		o.log.Errorf("Failed to decode created user response: %v", err)
 		return err
@@ -203,7 +208,7 @@ func (o *authUsecase) RegisterCustomer(email, password, confirmPassword string) 
 	}
 
 	// Optionally, parse the response body if needed
-	var updatedUser model.User
+	var updatedUser model.GetUserResponse
 	if err := json.NewDecoder(res.Body).Decode(&updatedUser); err != nil {
 		o.log.Errorf("Failed to decode updated user response: %v", err)
 		return err
@@ -236,7 +241,7 @@ func (a *authUsecase) VerifyUserEmail(token string) error {
 		return fmt.Errorf("error decoding token: %w", err)
 	}
 
-	url := constant.USER_SERVICE + "/verify?token=" + token + "&user_id=" + userID
+	url := constant.USER_SERVICE + "/verify?token=" + token + "&user_id=" + fmt.Sprintf("%d", userID)
 
 	// Create the HTTP PUT request
 	req, err := http.NewRequest("POST", url, nil)

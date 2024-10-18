@@ -8,9 +8,13 @@ import (
 	"github.com/spf13/viper"
 )
 
+// GenerateJWT generates a JWT token for a given user ID, role, and email.
 func GenerateJWT(userID int64, role, email string) (string, error) {
 	// Get environment variables
 	key := viper.GetString("JWT_SECRET")
+	if key == "" {
+		return "", errors.New("JWT_SECRET is not set")
+	}
 
 	var jwtSecret = []byte(key) // Replace with your actual secret key
 
@@ -34,9 +38,13 @@ func GenerateJWT(userID int64, role, email string) (string, error) {
 	return tokenString, nil
 }
 
-func DecodeJWT(tokenString string) (string, error) {
+// DecodeJWT decodes a JWT token and returns the user ID.
+func DecodeJWT(tokenString string) (int64, error) {
 	// Get the JWT secret from the environment variables
 	jwtSecret := []byte(viper.GetString("JWT_SECRET"))
+	if len(jwtSecret) == 0 {
+		return 0, errors.New("JWT_SECRET is not set")
+	}
 
 	// Parse the token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -48,18 +56,18 @@ func DecodeJWT(tokenString string) (string, error) {
 	})
 
 	if err != nil {
-		return "", errors.New("invalid token")
+		return 0, errors.New("invalid token: " + err.Error())
 	}
 
 	// Extract claims and verify them
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 		// Extract the user ID from the claims
-		userID, ok := claims["Id"].(string)
+		userIDFloat, ok := claims["Id"].(float64)
 		if !ok {
-			return "", errors.New("user ID not found in token")
+			return 0, errors.New("user ID not found in token")
 		}
-		return userID, nil
+		return int64(userIDFloat), nil
 	}
 
-	return "", errors.New("invalid token")
+	return 0, errors.New("invalid token")
 }
