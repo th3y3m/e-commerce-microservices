@@ -24,6 +24,7 @@ func RegisterHandlers() *gin.Engine {
 	mail := r.Group("/api/mail")
 	{
 		mail.POST("/send-mail", SendMail)
+		mail.POST("/send-noti", SendNotification)
 		// mail.POST("/send-order-details", SendOrderDetails)
 	}
 

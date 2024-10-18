@@ -2,6 +2,19 @@ package model
 
 import "time"
 
+type GetProductResponse struct {
+	ProductID   int64   `json:"product_id"`
+	SellerID    int64   `json:"seller_id"`
+	ProductName string  `json:"product_name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	Quantity    int     `json:"quantity"`
+	CategoryID  int64   `json:"category_id"`
+	ImageURL    string  `json:"image_url"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+	IsDeleted   bool    `json:"is_deleted"`
+}
 type GetOrderDetailsRequest struct {
 	OrderID   *int64 `json:"order_id"`
 	ProductID *int64 `json:"product_id"`

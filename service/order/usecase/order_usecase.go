@@ -353,6 +353,36 @@ func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, Courier
 				return &model.GetOrderResponse{}, err
 			}
 
+			url = constant.PRODUCT_SERVICE + "/discount-price" + fmt.Sprintf("/%d", product.ProductID)
+
+			req, err = http.NewRequestWithContext(ctx, "GET", url, nil)
+
+			if err != nil {
+				o.log.Errorf("Failed to create product discount request: %v", err)
+				return &model.GetOrderResponse{}, err
+			}
+
+			resp, err = client.Do(req)
+			if err != nil {
+				o.log.Errorf("Failed to execute product discount request: %v", err)
+				return &model.GetOrderResponse{}, err
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != http.StatusOK {
+				o.log.Errorf("Product service returned non-OK status: %d", resp.StatusCode)
+				return &model.GetOrderResponse{}, fmt.Errorf("product service returned non-OK status: %d", resp.StatusCode)
+			}
+
+			var discountPrice float64
+			err = json.NewDecoder(resp.Body).Decode(&discountPrice)
+			if err != nil {
+				o.log.Errorf("Failed to decode product discount response: %v", err)
+				return &model.GetOrderResponse{}, err
+			}
+
+			p.Price = discountPrice
+
 			productDetails[product.ProductID] = p
 		}
 

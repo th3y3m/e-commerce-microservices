@@ -82,7 +82,7 @@ func (m *mailUsecase) SendOrderDetails(Customer model.User, Order model.Order, O
 	// Populate the form data
 	type OrderDetailWithProduct struct {
 		OrderDetail model.OrderDetail
-		Product     model.Product
+		Product     model.GetProductResponse
 	}
 
 	var orderDetailsWithProduct []OrderDetailWithProduct
@@ -104,7 +104,7 @@ func (m *mailUsecase) SendOrderDetails(Customer model.User, Order model.Order, O
 		}
 
 		// Unmarshal the response into the Product struct
-		var product model.Product
+		var product model.GetProductResponse
 		err = json.NewDecoder(res.Body).Decode(&product)
 		if err != nil {
 			log.Printf("Failed to decode product details for product ID %d: %v", od.ProductID, err)
@@ -165,6 +165,24 @@ func (m *mailUsecase) SendOrderDetails(Customer model.User, Order model.Order, O
 			default:
 				return 0
 			}
+		},
+		"formatCurrency": func(amount float64) string {
+			return fmt.Sprintf("%.0f VND", amount)
+		},
+		"formatWithSpaces": func(amount float64) string {
+			s := fmt.Sprintf("%.0f", amount)
+			n := len(s)
+			if n <= 3 {
+				return s
+			}
+			var result strings.Builder
+			for i, c := range s {
+				if i > 0 && (n-i)%3 == 0 {
+					result.WriteRune(' ')
+				}
+				result.WriteRune(c)
+			}
+			return result.String() + " VND"
 		},
 	}).Parse(string(htmlTemplate))
 	if err != nil {

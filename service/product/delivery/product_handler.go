@@ -160,3 +160,32 @@ func GetPaginatedProduct(c *gin.Context) {
 
 	c.JSON(200, products)
 }
+
+func GetProductPriceAfterDiscount(c *gin.Context) {
+	module := dependency_injection.NewProductUsecaseProvider()
+
+	productIDStr := c.Param("product_id")
+	productID, err := strconv.ParseInt(productIDStr, 10, 64)
+	if err != nil {
+		logrus.Error(err)
+		c.JSON(400, gin.H{
+			"error": "Invalid product ID",
+		})
+		return
+	}
+
+	req := model.GetProductPriceAfterDiscount{
+		ProductID: productID,
+	}
+
+	price, err := module.GetProductPriceAfterDiscount(c, &req)
+	if err != nil {
+		logrus.Error(err)
+		c.JSON(500, gin.H{
+			"error": "Internal Server Error",
+		})
+		return
+	}
+
+	c.JSON(200, price)
+}

@@ -100,7 +100,7 @@
             <h2>Order Information</h2>
             <p><strong>Order ID:</strong> {{.Order.OrderID}}</p>
             <p><strong>Order Date:</strong> {{.Order.OrderDate}}</p>
-            <p><strong>Total Amount:</strong> ${{.Order.TotalAmount}}</p>
+            <p><strong>Total Amount:</strong> {{formatWithSpaces .Order.TotalAmount}}</p>
             <p><strong>Order Status:</strong> {{.Order.OrderStatus}}</p>
             <p><strong>Shipping Address:</strong> {{.Order.ShippingAddress}}</p>
         </div>
@@ -124,8 +124,9 @@
                         <td>{{.Product.ProductName}}</td>
                         <td>{{.Product.Description}}</td>
                         <td>{{.OrderDetail.Quantity}}</td>
-                        <td>${{.OrderDetail.UnitPrice}}</td>
-                        <td>${{multiply (toFloat64 .OrderDetail.Quantity) .OrderDetail.UnitPrice}}</td>
+                        <td>{{formatWithSpaces .OrderDetail.UnitPrice}}</td>
+                        <td>{{formatWithSpaces (multiply (toFloat64 .OrderDetail.Quantity) .OrderDetail.UnitPrice)}}
+                        </td>
                     </tr>
                     {{end}}
                 </tbody>

@@ -27,6 +27,7 @@ func RegisterHandlers() *gin.Engine {
 		product.POST("", CreateProduct)
 		product.PUT("", UpdateProduct)
 		product.DELETE("", DeleteProduct)
+		product.GET("/discount-price/:product_id", GetProductPriceAfterDiscount)
 	}
 
 	return r
