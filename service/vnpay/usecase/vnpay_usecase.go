@@ -17,6 +17,7 @@ import (
 	"th3y3m/e-commerce-microservices/service/vnpay/model"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -57,12 +58,13 @@ func (s *VnpayUsecase) CreateVNPayUrl(amount float64, orderID string) (string, e
 	}
 	clientIPAddress := ipAddrs[0].String()
 
+	uniqueOrderId := fmt.Sprintf("%s-%s", orderID, uuid.New().String())
+
 	pay := util.NewPayLib()
-	vnpAmount := amount
 	pay.AddRequestData("vnp_Version", "2.1.0")
 	pay.AddRequestData("vnp_Command", "pay")
 	pay.AddRequestData("vnp_TmnCode", s.tmnCode)
-	pay.AddRequestData("vnp_Amount", fmt.Sprintf("%.0f", vnpAmount))
+	pay.AddRequestData("vnp_Amount", fmt.Sprintf("%.0f", amount*100))
 	pay.AddRequestData("vnp_BankCode", "")
 	pay.AddRequestData("vnp_CreateDate", time.Now().Format("20060102150405"))
 	pay.AddRequestData("vnp_CurrCode", "VND")
@@ -71,7 +73,7 @@ func (s *VnpayUsecase) CreateVNPayUrl(amount float64, orderID string) (string, e
 	pay.AddRequestData("vnp_OrderInfo", "Customer")
 	pay.AddRequestData("vnp_OrderType", "other")
 	pay.AddRequestData("vnp_ReturnUrl", s.returnUrl)
-	pay.AddRequestData("vnp_TxnRef", orderID)
+	pay.AddRequestData("vnp_TxnRef", uniqueOrderId)
 
 	TransactionUrl := pay.CreateRequestUrl(s.url, s.hashSecret)
 	return TransactionUrl, nil
@@ -84,6 +86,12 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 	queryString.Del("vnp_SecureHash")
 	queryString.Del("vnp_SecureHashType")
 
+	orderIdParts := strings.Split(queryString.Get("vnp_TxnRef"), "-")
+	if len(orderIdParts) < 2 {
+		return nil, fmt.Errorf("invalid orderId format")
+	}
+	orderId := orderIdParts[0]
+
 	rawData := make([]string, 0, len(queryString))
 	for key, val := range queryString {
 		rawData = append(rawData, key+"="+strings.Join(val, ""))
@@ -95,7 +103,7 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 		return &model.PaymentResponse{IsSuccessful: false, RedirectUrl: "LINK_INVALID"}, nil
 	}
 
-	res, err := http.Get(fmt.Sprintf("%s/%s", constant.ORDER_SERVICE, queryString.Get("vnp_TxnRef")))
+	res, err := http.Get(fmt.Sprintf("%s/%s", constant.ORDER_SERVICE, orderId))
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +113,7 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 		return nil, fmt.Errorf("error: received status code %d from order service", res.StatusCode)
 	}
 
-	var order model.Order
+	var order model.GetOrderResponse
 	if err := json.NewDecoder(res.Body).Decode(&order); err != nil {
 		return nil, fmt.Errorf("error decoding order response: %v", err)
 	}
@@ -123,10 +131,10 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 		updateModel := model.UpdateOrderRequest{
 			OrderID:               order.OrderID,
 			CustomerID:            order.CustomerID,
-			OrderDate:             order.OrderDate,
+			OrderDate:             util.ParseTime(order.OrderDate),
 			OrderStatus:           order.OrderStatus,
-			ActualDeliveryDate:    order.ActualDeliveryDate,
-			EstimatedDeliveryDate: order.EstimatedDeliveryDate,
+			ActualDeliveryDate:    util.ParseTime(order.ActualDeliveryDate),
+			EstimatedDeliveryDate: util.ParseTime(order.EstimatedDeliveryDate),
 			ShippingAddress:       order.ShippingAddress,
 			CourierID:             order.CourierID,
 			FreightPrice:          order.FreightPrice,
@@ -167,6 +175,7 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 		if err != nil {
 			return nil, fmt.Errorf("invalid payment amount: %v", err)
 		}
+		paymentAmount = paymentAmount / 100
 
 		paymentCreateModel := &model.CreatePaymentRequest{
 			OrderID:          order.OrderID,
@@ -222,10 +231,10 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 	updateModel := model.UpdateOrderRequest{
 		OrderID:               order.OrderID,
 		CustomerID:            order.CustomerID,
-		OrderDate:             order.OrderDate,
+		OrderDate:             util.ParseTime(order.OrderDate),
 		OrderStatus:           order.OrderStatus,
-		ActualDeliveryDate:    order.ActualDeliveryDate,
-		EstimatedDeliveryDate: order.EstimatedDeliveryDate,
+		ActualDeliveryDate:    util.ParseTime(order.ActualDeliveryDate),
+		EstimatedDeliveryDate: util.ParseTime(order.EstimatedDeliveryDate),
 		ShippingAddress:       order.ShippingAddress,
 		CourierID:             order.CourierID,
 		FreightPrice:          order.FreightPrice,
@@ -263,7 +272,7 @@ func (s *VnpayUsecase) ValidateVNPayResponse(queryString url.Values) (*model.Pay
 
 	return &model.PaymentResponse{
 		IsSuccessful: false,
-		RedirectUrl:  constant.PAYMENT_RESPONSE_REJECT_URL + "?orderId=" + queryString.Get("vnp_TxnRef"),
+		RedirectUrl:  constant.PAYMENT_RESPONSE_REJECT_URL + "?orderId=" + orderId,
 	}, nil
 }
 

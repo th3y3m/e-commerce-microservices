@@ -52,11 +52,11 @@ const PAYMENT_RESPONSE_REJECT_URL = "http://localhost:3000/reject"
 const PAYMENT_RESPONSE_CONFIRM_URL = "http://localhost:3000/confirm"
 
 const PAYMENT_STATUS_PENDING = "Pending"
-const PAYMENT_STATUS_COMPLETED = "Complete"
+const PAYMENT_STATUS_COMPLETED = "Completed"
 const PAYMENT_STATUS_FAILED = "Failed"
 
 const ORDER_STATUS_PENDING = "Pending"
-const ORDER_STATUS_COMPLETED = "Complete"
+const ORDER_STATUS_COMPLETED = "Completed"
 const ORDER_STATUS_FAILED = "Failed"
 const ORDER_STATUS_CANCELED = "Canceled"
 

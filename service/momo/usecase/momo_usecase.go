@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"th3y3m/e-commerce-microservices/pkg/constant"
 	"th3y3m/e-commerce-microservices/pkg/util"
 	"th3y3m/e-commerce-microservices/service/momo/model"
@@ -55,7 +56,7 @@ func (s *MoMoService) CreateMoMoUrl(amount float64, orderId string) (string, err
 	requestId := uuid.New().String()
 	orderInfo := "Customer"
 	formattedAmount := int64(amount) // Convert to VND
-	orderID := "ORDER" + orderId
+	orderID := fmt.Sprintf("%s-%s", orderId, uuid.New().String())
 
 	// Create raw signature string
 	rawHash := fmt.Sprintf("accessKey=%s&amount=%d&extraData=%s&ipnUrl=%s&orderId=%s&orderInfo=%s&partnerCode=%s&redirectUrl=%s&requestId=%s&requestType=%s",
@@ -103,10 +104,16 @@ func (s *MoMoService) CreateMoMoUrl(amount float64, orderId string) (string, err
 }
 
 func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.PaymentResponse, error) {
-	orderId := queryString.Get("orderId")
+	combinedOrderId := queryString.Get("orderId")
 	resultCode := queryString.Get("resultCode")
 	amount := queryString.Get("amount")
 	signature := queryString.Get("signature")
+
+	orderIdParts := strings.Split(combinedOrderId, "-")
+	if len(orderIdParts) < 2 {
+		return nil, fmt.Errorf("invalid orderId format")
+	}
+	orderId := orderIdParts[0]
 
 	// Fetch the order details
 	res, err := http.Get(fmt.Sprintf("%s/%s", constant.ORDER_SERVICE, orderId))
@@ -119,7 +126,7 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 		return nil, fmt.Errorf("error: received status code %d from order service", res.StatusCode)
 	}
 
-	var order model.Order
+	var order model.GetOrderResponse
 	if err := json.NewDecoder(res.Body).Decode(&order); err != nil {
 		return nil, fmt.Errorf("error decoding order response: %v", err)
 	}
@@ -136,10 +143,10 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 		updateModel := model.UpdateOrderRequest{
 			OrderID:               order.OrderID,
 			CustomerID:            order.CustomerID,
-			OrderDate:             order.OrderDate,
+			OrderDate:             util.ParseTime(order.OrderDate),
 			OrderStatus:           order.OrderStatus,
-			ActualDeliveryDate:    order.ActualDeliveryDate,
-			EstimatedDeliveryDate: order.EstimatedDeliveryDate,
+			ActualDeliveryDate:    util.ParseTime(order.ActualDeliveryDate),
+			EstimatedDeliveryDate: util.ParseTime(order.EstimatedDeliveryDate),
 			ShippingAddress:       order.ShippingAddress,
 			CourierID:             order.CourierID,
 			FreightPrice:          order.FreightPrice,
@@ -227,10 +234,10 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 	updateModel := model.UpdateOrderRequest{
 		OrderID:               order.OrderID,
 		CustomerID:            order.CustomerID,
-		OrderDate:             order.OrderDate,
+		OrderDate:             util.ParseTime(order.OrderDate),
 		OrderStatus:           order.OrderStatus,
-		ActualDeliveryDate:    order.ActualDeliveryDate,
-		EstimatedDeliveryDate: order.EstimatedDeliveryDate,
+		ActualDeliveryDate:    util.ParseTime(order.ActualDeliveryDate),
+		EstimatedDeliveryDate: util.ParseTime(order.EstimatedDeliveryDate),
 		ShippingAddress:       order.ShippingAddress,
 		CourierID:             order.CourierID,
 		FreightPrice:          order.FreightPrice,
