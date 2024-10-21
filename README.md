@@ -1,3 +1,6 @@
+[![CodeQL](https://github.com/th3y3m/e-commerce-microservices/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/th3y3m/e-commerce-microservices/actions/workflows/github-code-scanning/codeql)
+![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 # 🎉 Welcome to E-commerce Microservices Project 🎉
 
 ## 🌟 Overview
@@ -73,14 +76,6 @@ This project is an e-commerce platform built using microservices architecture. I
 
 ## 🚀 Deployment
 - The project is containerized using Docker, making it easy to deploy and scale.
-
-## 🤝 Contributing
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature-branch`).
-3. Make your changes.
-4. Commit your changes (`git commit -m 'Add some feature'`).
-5. Push to the branch (`git push origin feature-branch`).
-6. Open a pull request.
 
 ## 📜 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
