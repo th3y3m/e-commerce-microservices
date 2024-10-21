@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+type MoMoResponse struct {
+	PaymentURL string `json:"payment_url"`
+}
+
 type PlaceOrderRequest struct {
 	UserId        int64   `json:"user_id"`
 	CartId        int64   `json:"cart_id"`

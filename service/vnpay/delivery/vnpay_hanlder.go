@@ -29,7 +29,7 @@ func CreateVnPayUrl(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"paymentUrl": paymentUrl})
+	c.JSON(http.StatusOK, gin.H{"payment_url": paymentUrl})
 }
 
 func ValidateVnPayResponse(c *gin.Context) {

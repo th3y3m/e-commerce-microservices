@@ -613,16 +613,16 @@ func (o *orderUsecase) processMomoPayment(ctx context.Context, order *model.GetO
 		return "", fmt.Errorf("Momo service returned non-OK status: %d", resp.StatusCode)
 	}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	var paymentUrl model.MoMoResponse
+	err = json.NewDecoder(resp.Body).Decode(&paymentUrl)
 	if err != nil {
-		o.log.Errorf("Failed to read response body: %v", err)
-		return "", err
+		o.log.Errorf("Failed to decode cart item response: %v", err)
+		return paymentUrl.PaymentURL, err
 	}
-	returnUrl := string(bodyBytes)
 
-	o.log.Infof("Received MoMo URL: %s", returnUrl)
+	o.log.Infof("Received MoMo URL: %s", paymentUrl.PaymentURL)
 
-	return returnUrl, nil
+	return paymentUrl.PaymentURL, nil
 }
 
 func (o *orderUsecase) processVnPayPayment(ctx context.Context, order *model.GetOrderResponse) (string, error) {
