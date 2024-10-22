@@ -40,6 +40,15 @@ services:
       timeout: 5s
       retries: 5
 
+  elasticsearch_service:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.1
+    environment:
+      - discovery.type=single-node
+    ports:
+      - "9200:9200"
+    networks:
+      - e_commerce_network
+
   product_service:
     build:
       context: .
@@ -52,12 +61,15 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
       RABBITMQ_URI: ${RABBITMQ_URI}
+      ELASTICSEARCH_URL: http://elasticsearch_service:9200
     depends_on:
       postgres_service:
         condition: service_healthy
       redis_service:
         condition: service_started
       rabbitmq_service:
+        condition: service_healthy
+      elasticsearch_service:
         condition: service_healthy
     networks:
       - e_commerce_network

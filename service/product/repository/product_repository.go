@@ -1,20 +1,24 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"th3y3m/e-commerce-microservices/service/product/model"
 
+	"github.com/elastic/go-elasticsearch/v7"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
 type productRepository struct {
-	log   *logrus.Logger
-	db    *gorm.DB
-	redis *redis.Client
+	log           *logrus.Logger
+	db            *gorm.DB
+	redis         *redis.Client
+	elasticClient *elasticsearch.Client // Add Elasticsearch client
 }
 
 type IProductRepository interface {
@@ -27,11 +31,12 @@ type IProductRepository interface {
 	GetList(ctx context.Context, req *model.GetProductsRequest) ([]*Product, error)
 }
 
-func NewProductRepository(db *gorm.DB, redis *redis.Client, log *logrus.Logger) IProductRepository {
+func NewProductRepository(db *gorm.DB, redis *redis.Client, log *logrus.Logger, elasticClient *elasticsearch.Client) IProductRepository {
 	return &productRepository{
-		db:    db,
-		redis: redis,
-		log:   log,
+		db:            db,
+		redis:         redis,
+		log:           log,
+		elasticClient: elasticClient,
 	}
 }
 
@@ -164,9 +169,9 @@ func (pr *productRepository) getQuerySearch(db *gorm.DB, req *model.GetProductsR
 		db = db.Where("category_id = ?", *req.CategoryID)
 	}
 
-	if req.ProductName != "" {
-		db = db.Where("product_name LIKE ?", "%"+req.ProductName+"%")
-	}
+	// if req.ProductName != "" {
+	// 	db = db.Where("product_name LIKE ?", "%"+req.ProductName+"%")
+	// }
 
 	if req.Description != "" {
 		db = db.Where("description LIKE ?", "%"+req.Description+"%")
@@ -188,11 +193,11 @@ func (pr *productRepository) getQuerySearch(db *gorm.DB, req *model.GetProductsR
 		db = db.Where("quantity <= ?", *req.MaxQuantity)
 	}
 
-	if req.FromDate.IsZero() == false {
+	if !req.FromDate.IsZero() {
 		db = db.Where("created_at >= ?", req.FromDate)
 	}
 
-	if req.ToDate.IsZero() == false {
+	if !req.ToDate.IsZero() {
 		db = db.Where("created_at <= ?", req.ToDate)
 	}
 
@@ -203,9 +208,10 @@ func (pr *productRepository) GetList(ctx context.Context, req *model.GetProducts
 	pr.log.Infof("Fetching product list with request: %+v", req)
 	var products []*Product
 
-	db := pr.db.WithContext(ctx)
-	db = pr.getQuerySearch(db, req)
+	// Handle the database query and filtering first
+	db := pr.getQuerySearch(pr.db.WithContext(ctx), req)
 
+	// Handle sorting
 	var sort string
 	var order string
 
@@ -223,12 +229,155 @@ func (pr *productRepository) GetList(ctx context.Context, req *model.GetProducts
 
 	db = db.Order(fmt.Sprintf("%s %s", sort, order))
 
-	result := db.Table("products").Offset(int(req.Paging.PageIndex-1) * int(req.Paging.PageSize)).Limit(int(req.Paging.PageSize)).Find(&products)
+	// Pagination
+	result := db.Table("products").
+		Offset(int(req.Paging.PageIndex-1) * int(req.Paging.PageSize)).
+		Limit(int(req.Paging.PageSize)).
+		Find(&products)
+
 	if result.Error != nil {
 		pr.log.Errorf("Error fetching product list: %v", result.Error)
 		return nil, result.Error
 	}
 
-	pr.log.Infof("Fetched %d products", len(products))
+	pr.log.Infof("Fetched %d products from the database", len(products))
+
+	// Index the products to Elasticsearch
+	for _, product := range products {
+		productJSON, err := json.Marshal(product)
+		if err != nil {
+			pr.log.Errorf("Error marshaling product %d: %v", product.ProductID, err)
+			continue
+		}
+
+		pr.log.Infof("Indexing product %d to Elasticsearch: %s", product.ProductID, string(productJSON))
+
+		res, err := pr.elasticClient.Index(
+			"products", // Use your Elasticsearch index name
+			bytes.NewReader(productJSON),
+			pr.elasticClient.Index.WithDocumentID(fmt.Sprintf("%d", product.ProductID)),
+		)
+		if err != nil {
+			pr.log.Errorf("Error indexing product %d: %v", product.ProductID, err)
+			continue
+		}
+		defer res.Body.Close()
+
+		// Log the Elasticsearch response status
+		pr.log.Infof("Elasticsearch indexing response status: %s", res.Status())
+
+		// Read the full response body
+		bodyBytes, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			pr.log.Errorf("Failed to read Elasticsearch indexing response body: %v", err)
+			continue
+		}
+
+		// Log the full response body
+		pr.log.Infof("Elasticsearch indexing response body: %s", string(bodyBytes))
+
+		if res.IsError() {
+			pr.log.Errorf("Error response from Elasticsearch: %s", string(bodyBytes))
+			continue
+		}
+
+		pr.log.Infof("Product %d indexed to Elasticsearch", product.ProductID)
+	}
+
+	// Now perform a search in Elasticsearch if ProductName is provided
+	if req.ProductName != "" {
+		pr.log.Infof("Searching for products with name: %s", req.ProductName)
+
+		// Build Elasticsearch query to search for ProductName with multiple match types
+		searchQuery := map[string]interface{}{
+			"query": map[string]interface{}{
+				"bool": map[string]interface{}{
+					"should": []map[string]interface{}{
+						{
+							"match": map[string]interface{}{
+								"ProductName": req.ProductName, // Exact match
+							},
+						},
+						{
+							"match": map[string]interface{}{
+								"ProductName": map[string]interface{}{
+									"query":     req.ProductName,
+									"fuzziness": "AUTO", // Fuzzy match
+								},
+							},
+						},
+						{
+							"match_phrase": map[string]interface{}{
+								"ProductName": req.ProductName, // Phrase match
+							},
+						},
+						{
+							"wildcard": map[string]interface{}{
+								"ProductName": fmt.Sprintf("*%s*", req.ProductName), // Wildcard match
+							},
+						},
+					},
+				},
+			},
+		}
+
+		// Serialize the search query to JSON
+		queryJSON, err := json.Marshal(searchQuery)
+		if err != nil {
+			pr.log.Errorf("Error marshaling search query: %v", err)
+			return nil, err
+		}
+
+		// Log the search query
+		pr.log.Infof("Elasticsearch search query: %s", string(queryJSON))
+
+		// Execute the search request to Elasticsearch
+		res, err := pr.elasticClient.Search(
+			pr.elasticClient.Search.WithContext(ctx),
+			pr.elasticClient.Search.WithIndex("products"), // Elasticsearch index name
+			pr.elasticClient.Search.WithBody(bytes.NewReader(queryJSON)),
+			pr.elasticClient.Search.WithTrackTotalHits(true),
+		)
+		if err != nil {
+			pr.log.Errorf("Error executing Elasticsearch search: %v", err)
+			return nil, err
+		}
+		defer res.Body.Close()
+
+		// Log the Elasticsearch response status
+		pr.log.Infof("Elasticsearch response status: %s", res.Status())
+
+		// Read the full response body
+		bodyBytes, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			pr.log.Errorf("Failed to read Elasticsearch response body: %v", err)
+			return nil, err
+		}
+
+		// Log the full response body
+		pr.log.Infof("Elasticsearch response body: %s", string(bodyBytes))
+
+		// Parse the Elasticsearch response
+		var esResponse struct {
+			Hits struct {
+				Hits []struct {
+					Source Product `json:"_source"`
+				} `json:"hits"`
+			} `json:"hits"`
+		}
+		if err := json.Unmarshal(bodyBytes, &esResponse); err != nil {
+			pr.log.Errorf("Error decoding Elasticsearch response: %v", err)
+			return nil, err
+		}
+
+		// Collect products from Elasticsearch response
+		products = make([]*Product, 0)
+		for _, hit := range esResponse.Hits.Hits {
+			products = append(products, &hit.Source)
+		}
+
+		pr.log.Infof("Found %d products from Elasticsearch", len(products))
+	}
+
 	return products, nil
 }
