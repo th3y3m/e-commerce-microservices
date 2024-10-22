@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net/http"
 	"th3y3m/e-commerce-microservices/service/api_gateway/handler"
 	"th3y3m/e-commerce-microservices/service/api_gateway/logging"
 	"th3y3m/e-commerce-microservices/service/api_gateway/middleware"
@@ -37,11 +36,6 @@ func main() {
 
 	log.Println("API Gateway running on port 9000...")
 	if err := r.Run(":9000"); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
-
-	log.Println("API Gateway with Rate Limiting running on port 9000...")
-	if err := http.ListenAndServe(":9000", nil); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }

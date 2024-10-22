@@ -25,15 +25,6 @@ func main() {
 		}
 	}
 
-	// viper.AutomaticEnv()
-	// viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-
-	// // Read the connection string from the environment variable
-	// connectionString := viper.GetString("CONNECTION_STRING")
-	// if connectionString == "" {
-	// 	log.Fatal("CONNECTION_STRING environment variable is not set")
-	// }
-
 	r := delivery.RegisterHandlers()
 
 	log.Println("Starting server on port 8081")

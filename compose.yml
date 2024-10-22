@@ -48,6 +48,11 @@ services:
       - "9200:9200"
     networks:
       - e_commerce_network
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"'" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   product_service:
     build:
@@ -61,7 +66,32 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB}
       RABBITMQ_URI: ${RABBITMQ_URI}
-      ELASTICSEARCH_URL: http://elasticsearch_service:9200
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL}
+    depends_on:
+      postgres_service:
+        condition: service_healthy
+      redis_service:
+        condition: service_started
+      rabbitmq_service:
+        condition: service_healthy
+      elasticsearch_service:
+        condition: service_healthy
+    networks:
+      - e_commerce_network
+
+  product_service_2:
+    build:
+      context: .
+      dockerfile: service/product/Dockerfile
+    ports:
+      - "9081:8081"
+    environment:
+      CONNECTION_STRING: ${CONNECTION_STRING}
+      REDIS_URI: ${REDIS_URI}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB}
+      RABBITMQ_URI: ${RABBITMQ_URI}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL}
     depends_on:
       postgres_service:
         condition: service_healthy

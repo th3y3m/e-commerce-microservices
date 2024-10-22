@@ -13,6 +13,7 @@ func CacheMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Check if the response is cached
 		if cachedResp, found := cache[r.URL.Path]; found {
+			w.Header().Set("Content-Type", "application/json")
 			w.Write(cachedResp)
 			return
 		}
@@ -27,7 +28,8 @@ func CacheMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Write the response
-		w.Write(cache[r.URL.Path])
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(recorder.body.String()))
 	}
 }
 
