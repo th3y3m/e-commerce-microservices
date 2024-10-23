@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"th3y3m/e-commerce-microservices/service/product/model"
 
 	"github.com/elastic/go-elasticsearch/v7"
@@ -27,7 +27,7 @@ type IProductRepository interface {
 	Create(ctx context.Context, product *Product) (*Product, error)
 	Update(ctx context.Context, product *Product) (*Product, error)
 	Delete(ctx context.Context, productID int64) error
-	getQuerySearch(db *gorm.DB, req *model.GetProductsRequest) *gorm.DB
+	GetQuerySearch(db *gorm.DB, req *model.GetProductsRequest) *gorm.DB
 	GetList(ctx context.Context, req *model.GetProductsRequest) ([]*Product, error)
 }
 
@@ -154,7 +154,7 @@ func (pr *productRepository) Delete(ctx context.Context, productID int64) error 
 	return nil
 }
 
-func (pr *productRepository) getQuerySearch(db *gorm.DB, req *model.GetProductsRequest) *gorm.DB {
+func (pr *productRepository) GetQuerySearch(db *gorm.DB, req *model.GetProductsRequest) *gorm.DB {
 	pr.log.Infof("Building query for product search: %+v", req)
 
 	if req.IsDeleted != nil {
@@ -209,7 +209,7 @@ func (pr *productRepository) GetList(ctx context.Context, req *model.GetProducts
 	var products []*Product
 
 	// Handle the database query and filtering first
-	db := pr.getQuerySearch(pr.db.WithContext(ctx), req)
+	db := pr.GetQuerySearch(pr.db.WithContext(ctx), req)
 
 	// Handle sorting
 	var sort string
@@ -267,7 +267,7 @@ func (pr *productRepository) GetList(ctx context.Context, req *model.GetProducts
 		pr.log.Infof("Elasticsearch indexing response status: %s", res.Status())
 
 		// Read the full response body
-		bodyBytes, err := ioutil.ReadAll(res.Body)
+		bodyBytes, err := io.ReadAll(res.Body)
 		if err != nil {
 			pr.log.Errorf("Failed to read Elasticsearch indexing response body: %v", err)
 			continue
@@ -348,7 +348,7 @@ func (pr *productRepository) GetList(ctx context.Context, req *model.GetProducts
 		pr.log.Infof("Elasticsearch response status: %s", res.Status())
 
 		// Read the full response body
-		bodyBytes, err := ioutil.ReadAll(res.Body)
+		bodyBytes, err := io.ReadAll(res.Body)
 		if err != nil {
 			pr.log.Errorf("Failed to read Elasticsearch response body: %v", err)
 			return nil, err
