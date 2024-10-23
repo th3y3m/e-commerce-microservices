@@ -1,4 +1,5 @@
 [![CodeQL](https://github.com/th3y3m/e-commerce-microservices/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/th3y3m/e-commerce-microservices/actions/workflows/github-code-scanning/codeql)
+[![E-Commerce Microservices (CI applid)](https://github.com/th3y3m/e-commerce-microservices/actions/workflows/ci-script.yml/badge.svg)](https://github.com/th3y3m/e-commerce-microservices/actions/workflows/ci-script.yml)
 ![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 
