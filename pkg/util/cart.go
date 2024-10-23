@@ -61,14 +61,12 @@ func GetCookieByName(r *http.Request, cookieName string) (*http.Cookie, error) {
 }
 
 // SaveCartToCookie saves the encoded cart string into a cookie
-func SaveCartToCookie(w http.ResponseWriter, cartString string, userId int64) error {
+func SaveCartToCookie(w http.ResponseWriter, cartString string) error {
 	if cartString == "" {
 		return errors.New("cart string is empty")
 	}
-	if userId == 0 {
-		return errors.New("user ID is empty")
-	}
-	cookieName := "Cart_" + strconv.FormatInt(userId, 10)
+
+	cookieName := "Cart"
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
 		Value:    cartString,
@@ -80,11 +78,8 @@ func SaveCartToCookie(w http.ResponseWriter, cartString string, userId int64) er
 }
 
 // DeleteCartToCookie deletes the cart cookie
-func DeleteCartToCookie(w http.ResponseWriter, userId int64) error {
-	if userId == 0 {
-		return errors.New("user ID is empty")
-	}
-	cookieName := "Cart_" + strconv.FormatInt(userId, 10)
+func DeleteCartToCookie(w http.ResponseWriter) error {
+	cookieName := "Cart"
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
 		Value:    "",

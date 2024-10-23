@@ -32,12 +32,13 @@ type ICartUsecase interface {
 	RemoveProductFromShoppingCart(ctx context.Context, userID, productID int64, quantity int) error
 	ClearShoppingCart(ctx context.Context, userID int64) error
 	NumberOfItemsInCart(ctx context.Context, userID int64) (int, error)
-	DeleteUnitItem(w http.ResponseWriter, r *http.Request, productId, userId int64) error
-	RemoveFromCart(w http.ResponseWriter, r *http.Request, productId, userId int64) error
-	GetCartFromCookie(r *http.Request, userId int64) ([]util.Item, error)
-	DeleteCartInCookie(w http.ResponseWriter, userId int64) error
-	NumberOfItemsInCartCookie(r *http.Request, userId string) (int, error)
-	SaveCartToCookieHandler(w http.ResponseWriter, r *http.Request, productId, userId int64) error
+
+	DeleteUnitItem(w http.ResponseWriter, r *http.Request, productId int64) error
+	RemoveFromCart(w http.ResponseWriter, r *http.Request, productId int64) error
+	GetCartFromCookie(r *http.Request) ([]util.Item, error)
+	DeleteCartInCookie(w http.ResponseWriter) error
+	NumberOfItemsInCartCookie(r *http.Request) (int, error)
+	SaveCartToCookieHandler(w http.ResponseWriter, r *http.Request, productId int64) error
 }
 
 func NewCartUsecase(cartRepo repository.ICartRepository, log *logrus.Logger) ICartUsecase {
@@ -493,8 +494,8 @@ func (pu *cartUsecase) NumberOfItemsInCart(ctx context.Context, userID int64) (i
 	return count, nil
 }
 
-func (s *cartUsecase) DeleteUnitItem(w http.ResponseWriter, r *http.Request, productId, userId int64) error {
-	cookieName := fmt.Sprintf("Cart_%d", userId)
+func (s *cartUsecase) DeleteUnitItem(w http.ResponseWriter, r *http.Request, productId int64) error {
+	cookieName := "Cart"
 	savedCart, err := r.Cookie(cookieName)
 	if err == nil && savedCart != nil {
 		// Retrieve cart items from the cookie (map[string]CartItem)
@@ -528,7 +529,7 @@ func (s *cartUsecase) DeleteUnitItem(w http.ResponseWriter, r *http.Request, pro
 			return fmt.Errorf("error removing item from cart: %w", err)
 		}
 
-		err = util.SaveCartToCookie(w, strItemsInCart, userId)
+		err = util.SaveCartToCookie(w, strItemsInCart)
 		if err != nil {
 			return fmt.Errorf("error removing item from cart: %w", err)
 		}
@@ -539,8 +540,8 @@ func (s *cartUsecase) DeleteUnitItem(w http.ResponseWriter, r *http.Request, pro
 }
 
 // RemoveFromCart removes a product from the cart.
-func (s *cartUsecase) RemoveFromCart(w http.ResponseWriter, r *http.Request, productId, userId int64) error {
-	cookieName := fmt.Sprintf("Cart_%d", userId)
+func (s *cartUsecase) RemoveFromCart(w http.ResponseWriter, r *http.Request, productId int64) error {
+	cookieName := "Cart"
 	savedCart, err := r.Cookie(cookieName)
 	if err == nil && savedCart != nil {
 		cartItems, err := util.GetCartFromCookie(savedCart.Value)
@@ -558,7 +559,7 @@ func (s *cartUsecase) RemoveFromCart(w http.ResponseWriter, r *http.Request, pro
 		if err != nil {
 			return fmt.Errorf("error removing item from cart: %w", err)
 		}
-		util.SaveCartToCookie(w, strItemsInCart, userId)
+		util.SaveCartToCookie(w, strItemsInCart)
 	} else {
 		fmt.Println("Error removing item from cart: cookie not found or empty")
 	}
@@ -566,9 +567,9 @@ func (s *cartUsecase) RemoveFromCart(w http.ResponseWriter, r *http.Request, pro
 }
 
 // GetCart retrieves the cart items for a user.
-func (s *cartUsecase) GetCartFromCookie(r *http.Request, userId int64) ([]util.Item, error) {
+func (s *cartUsecase) GetCartFromCookie(r *http.Request) ([]util.Item, error) {
 	var savedCart string
-	cartCookie, err := r.Cookie(fmt.Sprintf("Cart_%d", userId))
+	cartCookie, err := r.Cookie("Cart")
 
 	if err == nil {
 		savedCart = cartCookie.Value
@@ -590,8 +591,8 @@ func (s *cartUsecase) GetCartFromCookie(r *http.Request, userId int64) ([]util.I
 }
 
 // DeleteCartInCookie removes the cart cookie for the user.
-func (s *cartUsecase) DeleteCartInCookie(w http.ResponseWriter, userId int64) error {
-	err := util.DeleteCartToCookie(w, userId)
+func (s *cartUsecase) DeleteCartInCookie(w http.ResponseWriter) error {
+	err := util.DeleteCartToCookie(w)
 	if err != nil {
 		return fmt.Errorf("error deleting cart in cookie: %w", err)
 	}
@@ -599,18 +600,11 @@ func (s *cartUsecase) DeleteCartInCookie(w http.ResponseWriter, userId int64) er
 }
 
 // NumberOfItemsInCart returns the number of items in the user's cart.
-func (s *cartUsecase) NumberOfItemsInCartCookie(r *http.Request, userId string) (int, error) {
+func (s *cartUsecase) NumberOfItemsInCartCookie(r *http.Request) (int, error) {
 	var savedCart string
-	if userId == "" {
-		cartCookie, err := r.Cookie("Cart")
-		if err == nil {
-			savedCart = cartCookie.Value
-		}
-	} else {
-		cartCookie, err := r.Cookie("Cart_" + userId)
-		if err == nil {
-			savedCart = cartCookie.Value
-		}
+	cartCookie, err := r.Cookie("Cart")
+	if err == nil {
+		savedCart = cartCookie.Value
 	}
 
 	if savedCart != "" {
@@ -629,11 +623,11 @@ func (s *cartUsecase) NumberOfItemsInCartCookie(r *http.Request, userId string) 
 }
 
 // SaveCartToCookie adds or updates a product in the cart, then saves it to a cookie.
-func (s *cartUsecase) SaveCartToCookieHandler(w http.ResponseWriter, r *http.Request, productId, userId int64) error {
+func (s *cartUsecase) SaveCartToCookieHandler(w http.ResponseWriter, r *http.Request, productId int64) error {
 
 	cartItems := make(map[int64]util.Item)
 
-	savedCart, err := r.Cookie(fmt.Sprintf("Cart_%d", userId))
+	savedCart, err := r.Cookie("Cart")
 	if err == nil && savedCart != nil {
 		cartItems, err = util.GetCartFromCookie(savedCart.Value)
 		if err != nil {
@@ -663,7 +657,7 @@ func (s *cartUsecase) SaveCartToCookieHandler(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		return fmt.Errorf("error saving cart to cookie: %w", err)
 	}
-	err = util.SaveCartToCookie(w, strItemsInCart, userId)
+	err = util.SaveCartToCookie(w, strItemsInCart)
 	if err != nil {
 		return fmt.Errorf("error saving cart to cookie: %w", err)
 	}
