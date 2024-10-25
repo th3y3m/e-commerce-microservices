@@ -39,13 +39,19 @@ func (pr *cartItemRepository) Get(ctx context.Context, cartID, productID int64) 
 	cacheKey := fmt.Sprintf("cartItem:%d:%d", cartID, productID)
 
 	// Try to get the cartItem from Redis cache
-	cachedCartItem, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		var cartItem CartItem
-		if err := json.Unmarshal([]byte(cachedCartItem), &cartItem); err == nil {
-			pr.log.Infof("CartItem found in cache: %+v", cartItem)
-			return &cartItem, nil
+	if pr.redis != nil {
+		cachedCartItem, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			var cartItem CartItem
+			if err := json.Unmarshal([]byte(cachedCartItem), &cartItem); err == nil {
+				pr.log.Infof("CartItem found in cache: %+v", cartItem)
+				return &cartItem, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get cartItem from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -56,10 +62,15 @@ func (pr *cartItemRepository) Get(ctx context.Context, cartID, productID int64) 
 		return nil, result.Error
 	}
 
-	// Save to cache with expiration
-	cartItemJSON, _ := json.Marshal(cartItem)
-	pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour)
-	pr.log.Infof("CartItem saved to cache: %d:%d", cartID, productID)
+	// Save to cache with expiration if Redis is available
+	if pr.redis != nil {
+		cartItemJSON, _ := json.Marshal(cartItem)
+		if err := pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour).Err(); err != nil {
+			pr.log.Warnf("Failed to save cartItem to Redis: %v", err)
+		} else {
+			pr.log.Infof("CartItem saved to cache: %d:%d", cartID, productID)
+		}
+	}
 
 	return &cartItem, nil
 }
@@ -73,10 +84,15 @@ func (pr *cartItemRepository) Create(ctx context.Context, cartItem *CartItem) (*
 	}
 	cacheKey := fmt.Sprintf("cartItem:%d:%d", cartItem.CartID, cartItem.ProductID)
 
-	// Save to cache with expiration
-	cartItemJSON, _ := json.Marshal(cartItem)
-	pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour)
-	pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
+	// Save to cache with expiration if Redis is available
+	if pr.redis != nil {
+		cartItemJSON, _ := json.Marshal(cartItem)
+		if err := pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour).Err(); err != nil {
+			pr.log.Warnf("Failed to save cartItem to Redis: %v", err)
+		} else {
+			pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
+		}
+	}
 
 	return cartItem, nil
 }
@@ -90,10 +106,15 @@ func (pr *cartItemRepository) Update(ctx context.Context, cartItem *CartItem) (*
 	}
 	cacheKey := fmt.Sprintf("cartItem:%d:%d", cartItem.CartID, cartItem.ProductID)
 
-	// Save to cache with expiration
-	cartItemJSON, _ := json.Marshal(cartItem)
-	pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour)
-	pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
+	// Save to cache with expiration if Redis is available
+	if pr.redis != nil {
+		cartItemJSON, _ := json.Marshal(cartItem)
+		if err := pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour).Err(); err != nil {
+			pr.log.Warnf("Failed to save cartItem to Redis: %v", err)
+		} else {
+			pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
+		}
+	}
 
 	return cartItem, nil
 }
@@ -109,9 +130,14 @@ func (pr *cartItemRepository) Delete(ctx context.Context, cartID, productID int6
 		return result.Error
 	}
 
-	// Delete the cartItem from the cache
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("CartItem deleted from cache: %d:%d", cartID, productID)
+	// Delete the cartItem from the cache if Redis is available
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete cartItem from Redis: %v", err)
+		} else {
+			pr.log.Infof("CartItem deleted from cache: %d:%d", cartID, productID)
+		}
+	}
 
 	return nil
 }
@@ -133,12 +159,18 @@ func (pr *cartItemRepository) GetList(ctx context.Context, cartID, productID *in
 	}
 
 	// Try to get the cartItems from Redis cache
-	cachedCartItems, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedCartItems), &cartItems); err == nil {
-			pr.log.Info("CartItems found in cache")
-			return cartItems, nil
+	if pr.redis != nil {
+		cachedCartItems, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedCartItems), &cartItems); err == nil {
+				pr.log.Info("CartItems found in cache")
+				return cartItems, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get cartItems from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -148,10 +180,15 @@ func (pr *cartItemRepository) GetList(ctx context.Context, cartID, productID *in
 		return nil, result.Error
 	}
 
-	// Save to cache with expiration
-	cartItemsJSON, _ := json.Marshal(cartItems)
-	pr.redis.Set(ctx, cacheKey, cartItemsJSON, time.Hour)
-	pr.log.Info("CartItems saved to cache")
+	// Save to cache with expiration if Redis is available
+	if pr.redis != nil {
+		cartItemsJSON, _ := json.Marshal(cartItems)
+		if err := pr.redis.Set(ctx, cacheKey, cartItemsJSON, time.Hour).Err(); err != nil {
+			pr.log.Warnf("Failed to save cartItems to Redis: %v", err)
+		} else {
+			pr.log.Info("CartItems saved to cache")
+		}
+	}
 
 	return cartItems, nil
 }
@@ -185,12 +222,23 @@ func (pr *cartItemRepository) UpdateOrCreate(ctx context.Context, cartItem CartI
 		}
 	}
 
-	// Save to cache with expiration
-	cartItemJSON, _ := json.Marshal(cartItem)
-	pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour)
-	pr.redis.Del(ctx, fmt.Sprintf("cartItems:cartID:%d", cartItem.CartID))
-	pr.redis.Del(ctx, fmt.Sprintf("cartItems:productID:%d", cartItem.ProductID))
-	pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
+	// Save to cache with expiration if Redis is available
+	if pr.redis != nil {
+		cartItemJSON, _ := json.Marshal(cartItem)
+		if err := pr.redis.Set(ctx, cacheKey, cartItemJSON, time.Hour).Err(); err != nil {
+			pr.log.Warnf("Failed to save cartItem to Redis: %v", err)
+		} else {
+			pr.log.Infof("CartItem saved to cache: %d:%d", cartItem.CartID, cartItem.ProductID)
+		}
+
+		// Invalidate related cache entries
+		if err := pr.redis.Del(ctx, fmt.Sprintf("cartItems:cartID:%d", cartItem.CartID)).Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate cartItems cache by cartID: %v", err)
+		}
+		if err := pr.redis.Del(ctx, fmt.Sprintf("cartItems:productID:%d", cartItem.ProductID)).Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate cartItems cache by productID: %v", err)
+		}
+	}
 
 	pr.log.Infof("Successfully updated or created cart item with cart ID: %d and product ID: %d", cartItem.CartID, cartItem.ProductID)
 	return nil

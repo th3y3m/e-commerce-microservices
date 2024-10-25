@@ -37,13 +37,19 @@ func (pr *discountRepository) Get(ctx context.Context, discountID int64) (*Disco
 	cacheKey := fmt.Sprintf("discount:%d", discountID)
 
 	// Try to get the discount from Redis cache
-	cachedDiscount, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		var discount Discount
-		if err := json.Unmarshal([]byte(cachedDiscount), &discount); err == nil {
-			pr.log.Infof("Discount found in cache: %+v", discount)
-			return &discount, nil
+	if pr.redis != nil {
+		cachedDiscount, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			var discount Discount
+			if err := json.Unmarshal([]byte(cachedDiscount), &discount); err == nil {
+				pr.log.Infof("Discount found in cache: %+v", discount)
+				return &discount, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get discount from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -54,10 +60,15 @@ func (pr *discountRepository) Get(ctx context.Context, discountID int64) (*Disco
 		return nil, result.Error
 	}
 
-	// Save to cache
-	discountJSON, _ := json.Marshal(discount)
-	pr.redis.Set(ctx, cacheKey, discountJSON, 0)
-	pr.log.Infof("Discount saved to cache: %d", discountID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		discountJSON, _ := json.Marshal(discount)
+		if err := pr.redis.Set(ctx, cacheKey, discountJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save discount to Redis: %v", err)
+		} else {
+			pr.log.Infof("Discount saved to cache: %d", discountID)
+		}
+	}
 
 	return &discount, nil
 }
@@ -68,12 +79,18 @@ func (pr *discountRepository) GetAll(ctx context.Context) ([]*Discount, error) {
 	cacheKey := "all_discounts"
 
 	// Try to get the discounts from Redis cache
-	cachedDiscounts, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedDiscounts), &discounts); err == nil {
-			pr.log.Info("Discounts found in cache")
-			return discounts, nil
+	if pr.redis != nil {
+		cachedDiscounts, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedDiscounts), &discounts); err == nil {
+				pr.log.Info("Discounts found in cache")
+				return discounts, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get discounts from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -82,10 +99,15 @@ func (pr *discountRepository) GetAll(ctx context.Context) ([]*Discount, error) {
 		return nil, err
 	}
 
-	// Save to cache
-	discountsJSON, _ := json.Marshal(discounts)
-	pr.redis.Set(ctx, cacheKey, discountsJSON, 0)
-	pr.log.Info("Discounts saved to cache")
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		discountsJSON, _ := json.Marshal(discounts)
+		if err := pr.redis.Set(ctx, cacheKey, discountsJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save discounts to Redis: %v", err)
+		} else {
+			pr.log.Info("Discounts saved to cache")
+		}
+	}
 
 	return discounts, nil
 }
@@ -98,13 +120,22 @@ func (pr *discountRepository) Create(ctx context.Context, discount *Discount) (*
 	}
 	cacheKey := fmt.Sprintf("discount:%d", discount.DiscountID)
 
-	discountJSON, _ := json.Marshal(discount)
-	pr.redis.Set(ctx, cacheKey, discountJSON, 0)
-	pr.log.Infof("Discount saved to cache: %d", discount.DiscountID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		discountJSON, _ := json.Marshal(discount)
+		if err := pr.redis.Set(ctx, cacheKey, discountJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save discount to Redis: %v", err)
+		} else {
+			pr.log.Infof("Discount saved to cache: %d", discount.DiscountID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_discounts")
-	pr.log.Info("Invalidated cache for all discounts")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_discounts").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all discounts cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all discounts")
+		}
+	}
 
 	// Return the newly created discount (with any updated fields)
 	return discount, nil
@@ -118,13 +149,22 @@ func (pr *discountRepository) Update(ctx context.Context, discount *Discount) (*
 	}
 	cacheKey := fmt.Sprintf("discount:%d", discount.DiscountID)
 
-	discountJSON, _ := json.Marshal(discount)
-	pr.redis.Set(ctx, cacheKey, discountJSON, 0)
-	pr.log.Infof("Discount saved to cache: %d", discount.DiscountID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		discountJSON, _ := json.Marshal(discount)
+		if err := pr.redis.Set(ctx, cacheKey, discountJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save discount to Redis: %v", err)
+		} else {
+			pr.log.Infof("Discount saved to cache: %d", discount.DiscountID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_discounts")
-	pr.log.Info("Invalidated cache for all discounts")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_discounts").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all discounts cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all discounts")
+		}
+	}
 
 	// Return the updated discount
 	return discount, nil
@@ -138,12 +178,22 @@ func (pr *discountRepository) Delete(ctx context.Context, discountID int64) erro
 	}
 
 	cacheKey := fmt.Sprintf("discount:%d", discountID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("Discount deleted from cache: %d", discountID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_discounts")
-	pr.log.Info("Invalidated cache for all discounts")
+	// Delete from cache if Redis is available
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete discount from Redis: %v", err)
+		} else {
+			pr.log.Infof("Discount deleted from cache: %d", discountID)
+		}
+
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_discounts").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all discounts cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all discounts")
+		}
+	}
 
 	return nil
 }

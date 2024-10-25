@@ -41,12 +41,20 @@ func (pr *productDiscountRepository) Create(ctx context.Context, productDiscount
 	cacheKey := fmt.Sprintf("productDiscount:%d:%d", productDiscount.ProductID, productDiscount.DiscountID)
 
 	productDiscountJSON, _ := json.Marshal(productDiscount)
-	pr.redis.Set(ctx, cacheKey, productDiscountJSON, 0)
-	pr.log.Infof("ProductDiscount saved to cache: %d:%d", productDiscount.ProductID, productDiscount.DiscountID)
+	if pr.redis != nil {
+		if err := pr.redis.Set(ctx, cacheKey, productDiscountJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save productDiscount to Redis: %v", err)
+		} else {
+			pr.log.Infof("ProductDiscount saved to cache: %d:%d", productDiscount.ProductID, productDiscount.DiscountID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_productDiscounts")
-	pr.log.Info("Invalidated cache for all productDiscounts")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_productDiscounts").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all productDiscounts cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all productDiscounts")
+		}
+	}
 
 	return productDiscount, nil
 }
@@ -74,12 +82,20 @@ func (pr *productDiscountRepository) Delete(ctx context.Context, productID, disc
 	}
 
 	cacheKey := fmt.Sprintf("productDiscount:%d:%d", productID, discountID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("ProductDiscount deleted from cache: %d:%d", productID, discountID)
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete productDiscount from Redis: %v", err)
+		} else {
+			pr.log.Infof("ProductDiscount deleted from cache: %d:%d", productID, discountID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_productDiscounts")
-	pr.log.Info("Invalidated cache for all productDiscounts")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_productDiscounts").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all productDiscounts cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all productDiscounts")
+		}
+	}
 
 	return nil
 }
@@ -95,47 +111,71 @@ func (pr *productDiscountRepository) Get(ctx context.Context, req *model.GetProd
 		pr.log.Infof("Fetching discounts for product ID: %d", *req.ProductID)
 
 		cacheKey = fmt.Sprintf("productDiscounts:productID:%d", *req.ProductID)
-		cachedData, err := pr.redis.Get(ctx, cacheKey).Result()
-		if err == nil {
-			if err := json.Unmarshal([]byte(cachedData), &productDiscounts); err == nil {
-				pr.log.Infof("Fetched product discounts for product ID: %d from cache", *req.ProductID)
-				return productDiscounts, nil
+		if pr.redis != nil {
+			cachedData, err := pr.redis.Get(ctx, cacheKey).Result()
+			if err == nil {
+				if err := json.Unmarshal([]byte(cachedData), &productDiscounts); err == nil {
+					pr.log.Infof("Fetched product discounts for product ID: %d from cache", *req.ProductID)
+					return productDiscounts, nil
+				}
+			} else if err != redis.Nil {
+				pr.log.Warnf("Failed to get product discounts from Redis: %v", err)
 			}
+		} else {
+			pr.log.Warn("Redis client is not initialized")
 		}
 		db = db.Where("product_id = ?", *req.ProductID)
 	} else if req.ProductID == nil && req.DiscountID != nil {
 		pr.log.Infof("Fetching products for discount ID: %d", *req.DiscountID)
 
 		cacheKey = fmt.Sprintf("productDiscounts:discountID:%d", *req.DiscountID)
-		cachedData, err := pr.redis.Get(ctx, cacheKey).Result()
-		if err == nil {
-			if err := json.Unmarshal([]byte(cachedData), &productDiscounts); err == nil {
-				pr.log.Infof("Fetched product discounts for discount ID: %d from cache", *req.DiscountID)
-				return productDiscounts, nil
+		if pr.redis != nil {
+			cachedData, err := pr.redis.Get(ctx, cacheKey).Result()
+			if err == nil {
+				if err := json.Unmarshal([]byte(cachedData), &productDiscounts); err == nil {
+					pr.log.Infof("Fetched product discounts for discount ID: %d from cache", *req.DiscountID)
+					return productDiscounts, nil
+				}
+			} else if err != redis.Nil {
+				pr.log.Warnf("Failed to get product discounts from Redis: %v", err)
 			}
+		} else {
+			pr.log.Warn("Redis client is not initialized")
 		}
 		db = db.Where("discount_id = ?", *req.DiscountID)
 	} else if req.ProductID != nil && req.DiscountID != nil {
 		pr.log.Infof("Fetching specific product discount for product ID: %d and discount ID: %d", *req.ProductID, *req.DiscountID)
 
 		cacheKey = fmt.Sprintf("productDiscounts:productID:%d:discountID:%d", *req.ProductID, *req.DiscountID)
-		cachedData, err := pr.redis.Get(ctx, cacheKey).Result()
-		if err == nil {
-			if err := json.Unmarshal([]byte(cachedData), &productDiscounts); err == nil {
-				pr.log.Infof("Fetched specific product discount for product ID: %d and discount ID: %d from cache", *req.ProductID, *req.DiscountID)
-				return productDiscounts, nil
+		if pr.redis != nil {
+			cachedData, err := pr.redis.Get(ctx, cacheKey).Result()
+			if err == nil {
+				if err := json.Unmarshal([]byte(cachedData), &productDiscounts); err == nil {
+					pr.log.Infof("Fetched specific product discount for product ID: %d and discount ID: %d from cache", *req.ProductID, *req.DiscountID)
+					return productDiscounts, nil
+				}
+			} else if err != redis.Nil {
+				pr.log.Warnf("Failed to get product discounts from Redis: %v", err)
 			}
+		} else {
+			pr.log.Warn("Redis client is not initialized")
 		}
 		db = db.Where("product_id = ? AND discount_id = ?", *req.ProductID, *req.DiscountID)
 	} else {
 		pr.log.Info("Fetching all product discounts")
 		cacheKey = "all_productDiscounts"
-		cachedData, err := pr.redis.Get(ctx, cacheKey).Result()
-		if err == nil {
-			if err := json.Unmarshal([]byte(cachedData), &productDiscounts); err == nil {
-				pr.log.Info("Fetched all product discounts from cache")
-				return productDiscounts, nil
+		if pr.redis != nil {
+			cachedData, err := pr.redis.Get(ctx, cacheKey).Result()
+			if err == nil {
+				if err := json.Unmarshal([]byte(cachedData), &productDiscounts); err == nil {
+					pr.log.Info("Fetched all product discounts from cache")
+					return productDiscounts, nil
+				}
+			} else if err != redis.Nil {
+				pr.log.Warnf("Failed to get product discounts from Redis: %v", err)
 			}
+		} else {
+			pr.log.Warn("Redis client is not initialized")
 		}
 	}
 
@@ -150,8 +190,13 @@ func (pr *productDiscountRepository) Get(ctx context.Context, req *model.GetProd
 	}
 
 	productDiscountsJSON, _ := json.Marshal(productDiscounts)
-	pr.redis.Set(ctx, cacheKey, productDiscountsJSON, 0) // Optionally, set an expiry time
-	pr.log.Infof("Product discounts saved to cache: %s", cacheKey)
+	if pr.redis != nil {
+		if err := pr.redis.Set(ctx, cacheKey, productDiscountsJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save product discounts to Redis: %v", err)
+		} else {
+			pr.log.Infof("Product discounts saved to cache: %s", cacheKey)
+		}
+	}
 
 	pr.log.Infof("Fetched %d product discounts", len(productDiscounts))
 	return productDiscounts, nil

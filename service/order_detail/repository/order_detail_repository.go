@@ -39,12 +39,18 @@ func (pr *orderDetailRepository) Get(ctx context.Context, orderID, productID int
 	cacheKey := fmt.Sprintf("orderDetail:%d - %d", orderID, productID)
 
 	// Try to get the orderDetail from Redis cache
-	cachedOrderDetail, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedOrderDetail), &orderDetail); err == nil {
-			pr.log.Infof("OrderDetail found in cache: %d:%d", orderID, productID)
-			return &orderDetail, nil
+	if pr.redis != nil {
+		cachedOrderDetail, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedOrderDetail), &orderDetail); err == nil {
+				pr.log.Infof("OrderDetail found in cache: %d:%d", orderID, productID)
+				return &orderDetail, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get orderDetail from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -53,10 +59,15 @@ func (pr *orderDetailRepository) Get(ctx context.Context, orderID, productID int
 		return nil, err
 	}
 
-	// Save to cache
-	orderDetailJSON, _ := json.Marshal(orderDetail)
-	pr.redis.Set(ctx, cacheKey, orderDetailJSON, 0)
-	pr.log.Infof("OrderDetail saved to cache: %d", orderID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		orderDetailJSON, _ := json.Marshal(orderDetail)
+		if err := pr.redis.Set(ctx, cacheKey, orderDetailJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save orderDetail to Redis: %v", err)
+		} else {
+			pr.log.Infof("OrderDetail saved to cache: %d", orderID)
+		}
+	}
 
 	return &orderDetail, nil
 }
@@ -69,13 +80,22 @@ func (pr *orderDetailRepository) Create(ctx context.Context, orderDetail *OrderD
 	}
 	cacheKey := fmt.Sprintf("orderDetail:%d - %d", orderDetail.OrderID, orderDetail.ProductID)
 
-	orderDetailJSON, _ := json.Marshal(orderDetail)
-	pr.redis.Set(ctx, cacheKey, orderDetailJSON, 0)
-	pr.log.Infof("OrderDetail saved to cache: %d - %d", orderDetail.OrderID, orderDetail.ProductID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		orderDetailJSON, _ := json.Marshal(orderDetail)
+		if err := pr.redis.Set(ctx, cacheKey, orderDetailJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save orderDetail to Redis: %v", err)
+		} else {
+			pr.log.Infof("OrderDetail saved to cache: %d - %d", orderDetail.OrderID, orderDetail.ProductID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_orderDetails")
-	pr.log.Info("Invalidated cache for all orderDetails")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_orderDetails").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all orderDetails cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all orderDetails")
+		}
+	}
 
 	return orderDetail, nil
 }
@@ -88,13 +108,22 @@ func (pr *orderDetailRepository) Update(ctx context.Context, orderDetail *OrderD
 	}
 	cacheKey := fmt.Sprintf("orderDetail:%d - %d", orderDetail.OrderID, orderDetail.ProductID)
 
-	orderDetailJSON, _ := json.Marshal(orderDetail)
-	pr.redis.Set(ctx, cacheKey, orderDetailJSON, 0)
-	pr.log.Infof("OrderDetail saved to cache: %d - %d", orderDetail.OrderID, orderDetail.ProductID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		orderDetailJSON, _ := json.Marshal(orderDetail)
+		if err := pr.redis.Set(ctx, cacheKey, orderDetailJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save orderDetail to Redis: %v", err)
+		} else {
+			pr.log.Infof("OrderDetail saved to cache: %d - %d", orderDetail.OrderID, orderDetail.ProductID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_orderDetails")
-	pr.log.Info("Invalidated cache for all orderDetails")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_orderDetails").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all orderDetails cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all orderDetails")
+		}
+	}
 
 	// Return the updated orderDetail
 	return orderDetail, nil
@@ -114,12 +143,22 @@ func (pr *orderDetailRepository) Delete(ctx context.Context, orderID, productID 
 	}
 
 	cacheKey := fmt.Sprintf("orderDetail:%d - %d", orderID, productID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("OrderDetail deleted from cache: %d", orderID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_orderDetails")
-	pr.log.Info("Invalidated cache for all orderDetails")
+	// Delete from cache if Redis is available
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete orderDetail from Redis: %v", err)
+		} else {
+			pr.log.Infof("OrderDetail deleted from cache: %d", orderID)
+		}
+
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_orderDetails").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all orderDetails cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all orderDetails")
+		}
+	}
 
 	return nil
 }
@@ -130,12 +169,18 @@ func (pr *orderDetailRepository) GetList(ctx context.Context, req *model.GetOrde
 	cacheKey := "all_orderDetails"
 
 	// Try to get the orderDetails from Redis cache
-	cachedOrderDetails, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedOrderDetails), &orderDetails); err == nil {
-			pr.log.Infof("OrderDetails found in cache: %d", req.OrderID)
-			return orderDetails, nil
+	if pr.redis != nil {
+		cachedOrderDetails, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedOrderDetails), &orderDetails); err == nil {
+				pr.log.Infof("OrderDetails found in cache: %d", req.OrderID)
+				return orderDetails, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get orderDetails from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database

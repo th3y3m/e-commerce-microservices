@@ -11,7 +11,6 @@ import (
 )
 
 func ConsumeMessages(ctx context.Context, queueName string, handler func(map[string]string) error) error {
-	// conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	rabbitMQURI := viper.GetString("RABBITMQ_URI")
 	log.Println("RABBITMQ_URI: ", rabbitMQURI)
 	conn, err := amqp.Dial(rabbitMQURI)

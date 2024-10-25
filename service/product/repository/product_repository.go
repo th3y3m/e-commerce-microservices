@@ -46,12 +46,18 @@ func (pr *productRepository) Get(ctx context.Context, productID int64) (*Product
 	cacheKey := fmt.Sprintf("product:%d", productID)
 
 	// Try to get the product from Redis cache
-	cachedProduct, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedProduct), &product); err == nil {
-			pr.log.Infof("Product found in cache: %d", productID)
-			return &product, nil
+	if pr.redis != nil {
+		cachedProduct, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedProduct), &product); err == nil {
+				pr.log.Infof("Product found in cache: %d", productID)
+				return &product, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get product from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -60,10 +66,15 @@ func (pr *productRepository) Get(ctx context.Context, productID int64) (*Product
 		return nil, err
 	}
 
-	// Save to cache
-	productJSON, _ := json.Marshal(product)
-	pr.redis.Set(ctx, cacheKey, productJSON, 0)
-	pr.log.Infof("Product saved to cache: %d", productID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		productJSON, _ := json.Marshal(product)
+		if err := pr.redis.Set(ctx, cacheKey, productJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save product to Redis: %v", err)
+		} else {
+			pr.log.Infof("Product saved to cache: %d", productID)
+		}
+	}
 
 	return &product, nil
 }
@@ -74,12 +85,18 @@ func (pr *productRepository) GetAll(ctx context.Context) ([]*Product, error) {
 	cacheKey := "all_products"
 
 	// Try to get the products from Redis cache
-	cachedProducts, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedProducts), &products); err == nil {
-			pr.log.Info("Products found in cache")
-			return products, nil
+	if pr.redis != nil {
+		cachedProducts, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedProducts), &products); err == nil {
+				pr.log.Info("Products found in cache")
+				return products, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get products from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -88,10 +105,15 @@ func (pr *productRepository) GetAll(ctx context.Context) ([]*Product, error) {
 		return nil, err
 	}
 
-	// Save to cache
-	productsJSON, _ := json.Marshal(products)
-	pr.redis.Set(ctx, cacheKey, productsJSON, 0)
-	pr.log.Info("Products saved to cache")
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		productsJSON, _ := json.Marshal(products)
+		if err := pr.redis.Set(ctx, cacheKey, productsJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save products to Redis: %v", err)
+		} else {
+			pr.log.Info("Products saved to cache")
+		}
+	}
 
 	return products, nil
 }
@@ -104,13 +126,22 @@ func (pr *productRepository) Create(ctx context.Context, product *Product) (*Pro
 	}
 	cacheKey := fmt.Sprintf("product:%d", product.ProductID)
 
-	productJSON, _ := json.Marshal(product)
-	pr.redis.Set(ctx, cacheKey, productJSON, 0)
-	pr.log.Infof("Product saved to cache: %d", product.ProductID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		productJSON, _ := json.Marshal(product)
+		if err := pr.redis.Set(ctx, cacheKey, productJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save product to Redis: %v", err)
+		} else {
+			pr.log.Infof("Product saved to cache: %d", product.ProductID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_products")
-	pr.log.Info("Invalidated cache for all products")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_products").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all products cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all products")
+		}
+	}
 
 	// Return the newly created product (with any updated fields)
 	return product, nil
@@ -124,13 +155,22 @@ func (pr *productRepository) Update(ctx context.Context, product *Product) (*Pro
 	}
 	cacheKey := fmt.Sprintf("product:%d", product.ProductID)
 
-	productJSON, _ := json.Marshal(product)
-	pr.redis.Set(ctx, cacheKey, productJSON, 0)
-	pr.log.Infof("Product saved to cache: %d", product.ProductID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		productJSON, _ := json.Marshal(product)
+		if err := pr.redis.Set(ctx, cacheKey, productJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save product to Redis: %v", err)
+		} else {
+			pr.log.Infof("Product saved to cache: %d", product.ProductID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_products")
-	pr.log.Info("Invalidated cache for all products")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_products").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all products cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all products")
+		}
+	}
 
 	// Return the updated product
 	return product, nil
@@ -144,12 +184,22 @@ func (pr *productRepository) Delete(ctx context.Context, productID int64) error 
 	}
 
 	cacheKey := fmt.Sprintf("product:%d", productID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("Product deleted from cache: %d", productID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_products")
-	pr.log.Info("Invalidated cache for all products")
+	// Delete from cache if Redis is available
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete product from Redis: %v", err)
+		} else {
+			pr.log.Infof("Product deleted from cache: %d", productID)
+		}
+
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_products").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all products cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all products")
+		}
+	}
 
 	return nil
 }
@@ -169,9 +219,9 @@ func (pr *productRepository) GetQuerySearch(db *gorm.DB, req *model.GetProductsR
 		db = db.Where("category_id = ?", *req.CategoryID)
 	}
 
-	// if req.ProductName != "" {
-	// 	db = db.Where("product_name LIKE ?", "%"+req.ProductName+"%")
-	// }
+	if pr.elasticClient == nil && req.ProductName != "" {
+		db = db.Where("product_name LIKE ?", "%"+req.ProductName+"%")
+	}
 
 	if req.Description != "" {
 		db = db.Where("description LIKE ?", "%"+req.Description+"%")
@@ -241,6 +291,11 @@ func (pr *productRepository) GetList(ctx context.Context, req *model.GetProducts
 	}
 
 	pr.log.Infof("Fetched %d products from the database", len(products))
+
+	// If Elasticsearch is available, index the products and perform a search
+	if pr.elasticClient == nil {
+		return products, nil
+	}
 
 	// Index the products to Elasticsearch
 	for _, product := range products {

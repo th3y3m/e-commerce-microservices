@@ -41,12 +41,18 @@ func (pr *newRepository) Get(ctx context.Context, newID int64) (*News, error) {
 	cacheKey := fmt.Sprintf("new:%d", newID)
 
 	// Try to get the new from Redis cache
-	cachedNew, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedNew), &new); err == nil {
-			pr.log.Infof("New found in cache: %d", newID)
-			return &new, nil
+	if pr.redis != nil {
+		cachedNew, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedNew), &new); err == nil {
+				pr.log.Infof("New found in cache: %d", newID)
+				return &new, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get new from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -55,10 +61,15 @@ func (pr *newRepository) Get(ctx context.Context, newID int64) (*News, error) {
 		return nil, err
 	}
 
-	// Save to cache
-	newJSON, _ := json.Marshal(new)
-	pr.redis.Set(ctx, cacheKey, newJSON, 0)
-	pr.log.Infof("New saved to cache: %d", newID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		newJSON, _ := json.Marshal(new)
+		if err := pr.redis.Set(ctx, cacheKey, newJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save new to Redis: %v", err)
+		} else {
+			pr.log.Infof("New saved to cache: %d", newID)
+		}
+	}
 
 	return &new, nil
 }
@@ -69,12 +80,18 @@ func (pr *newRepository) GetAll(ctx context.Context) ([]*News, error) {
 	cacheKey := "all_news"
 
 	// Try to get the news from Redis cache
-	cachedNews, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedNews), &news); err == nil {
-			pr.log.Info("News found in cache")
-			return news, nil
+	if pr.redis != nil {
+		cachedNews, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedNews), &news); err == nil {
+				pr.log.Info("News found in cache")
+				return news, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get news from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -83,10 +100,15 @@ func (pr *newRepository) GetAll(ctx context.Context) ([]*News, error) {
 		return nil, err
 	}
 
-	// Save to cache
-	newsJSON, _ := json.Marshal(news)
-	pr.redis.Set(ctx, cacheKey, newsJSON, 0)
-	pr.log.Info("News saved to cache")
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		newsJSON, _ := json.Marshal(news)
+		if err := pr.redis.Set(ctx, cacheKey, newsJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save news to Redis: %v", err)
+		} else {
+			pr.log.Info("News saved to cache")
+		}
+	}
 
 	return news, nil
 }
@@ -99,13 +121,22 @@ func (pr *newRepository) Create(ctx context.Context, new *News) (*News, error) {
 	}
 	cacheKey := fmt.Sprintf("new:%d", new.NewsID)
 
-	newJSON, _ := json.Marshal(new)
-	pr.redis.Set(ctx, cacheKey, newJSON, 0)
-	pr.log.Infof("New saved to cache: %d", new.NewsID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		newJSON, _ := json.Marshal(new)
+		if err := pr.redis.Set(ctx, cacheKey, newJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save new to Redis: %v", err)
+		} else {
+			pr.log.Infof("New saved to cache: %d", new.NewsID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_news")
-	pr.log.Info("Invalidated cache for all news")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_news").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all news cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all news")
+		}
+	}
 
 	// Return the newly created new (with any updated fields)
 	return new, nil
@@ -119,13 +150,22 @@ func (pr *newRepository) Update(ctx context.Context, new *News) (*News, error) {
 	}
 	cacheKey := fmt.Sprintf("new:%d", new.NewsID)
 
-	newJSON, _ := json.Marshal(new)
-	pr.redis.Set(ctx, cacheKey, newJSON, 0)
-	pr.log.Infof("New saved to cache: %d", new.NewsID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		newJSON, _ := json.Marshal(new)
+		if err := pr.redis.Set(ctx, cacheKey, newJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save new to Redis: %v", err)
+		} else {
+			pr.log.Infof("New saved to cache: %d", new.NewsID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_news")
-	pr.log.Info("Invalidated cache for all news")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_news").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all news cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all news")
+		}
+	}
 
 	// Return the updated new
 	return new, nil
@@ -139,12 +179,22 @@ func (pr *newRepository) Delete(ctx context.Context, newID int64) error {
 	}
 
 	cacheKey := fmt.Sprintf("new:%d", newID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("New deleted from cache: %d", newID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_news")
-	pr.log.Info("Invalidated cache for all news")
+	// Delete from cache if Redis is available
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete new from Redis: %v", err)
+		} else {
+			pr.log.Infof("New deleted from cache: %d", newID)
+		}
+
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_news").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all news cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all news")
+		}
+	}
 
 	return nil
 }

@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"th3y3m/e-commerce-microservices/service/user/model"
 	"time"
+
+	"th3y3m/e-commerce-microservices/service/user/model"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
@@ -51,16 +52,23 @@ func (pr *userRepository) Get(ctx context.Context, userID *int64, email string) 
 		return nil, fmt.Errorf("either userID or email must be provided")
 	}
 
-	// Try to get the user from Redis cache
-	cachedUser, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedUser), &user); err == nil {
-			pr.log.Infof("User found in cache: %s", cacheKey)
-			return &user, nil
+	// Check if Redis client is initialized
+	if pr.redis != nil {
+		// Try to get the user from Redis cache
+		cachedUser, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedUser), &user); err == nil {
+				pr.log.Infof("User found in cache: %s", cacheKey)
+				return &user, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get user from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
-	// If not found in cache, get from database
+	// If not found in cache or Redis is unavailable, get from database
 	query := pr.db.WithContext(ctx)
 	if userID != nil {
 		query = query.First(&user, *userID)
@@ -73,10 +81,15 @@ func (pr *userRepository) Get(ctx context.Context, userID *int64, email string) 
 		return nil, err
 	}
 
-	// Save to cache
-	userJSON, _ := json.Marshal(user)
-	pr.redis.Set(ctx, cacheKey, userJSON, 0)
-	pr.log.Infof("User saved to cache: %s", cacheKey)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		userJSON, _ := json.Marshal(user)
+		if err := pr.redis.Set(ctx, cacheKey, userJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save user to Redis: %v", err)
+		} else {
+			pr.log.Infof("User saved to cache: %s", cacheKey)
+		}
+	}
 
 	return &user, nil
 }
@@ -87,12 +100,18 @@ func (pr *userRepository) GetAll(ctx context.Context) ([]*User, error) {
 	cacheKey := "all_users"
 
 	// Try to get the users from Redis cache
-	cachedUsers, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedUsers), &users); err == nil {
-			pr.log.Info("Users found in cache")
-			return users, nil
+	if pr.redis != nil {
+		cachedUsers, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedUsers), &users); err == nil {
+				pr.log.Info("Users found in cache")
+				return users, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get users from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -102,9 +121,14 @@ func (pr *userRepository) GetAll(ctx context.Context) ([]*User, error) {
 	}
 
 	// Save to cache
-	usersJSON, _ := json.Marshal(users)
-	pr.redis.Set(ctx, cacheKey, usersJSON, 0)
-	pr.log.Info("Users saved to cache")
+	if pr.redis != nil {
+		userJSON, _ := json.Marshal(users)
+		if err := pr.redis.Set(ctx, cacheKey, userJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save user to Redis: %v", err)
+		} else {
+			pr.log.Infof("User saved to cache: %s", cacheKey)
+		}
+	}
 
 	return users, nil
 }
@@ -115,15 +139,22 @@ func (pr *userRepository) Create(ctx context.Context, user *User) (*User, error)
 		pr.log.Errorf("Error creating user: %v", err)
 		return nil, err
 	}
-	cacheKey := fmt.Sprintf("user:%d", user.UserID)
 
-	userJSON, _ := json.Marshal(user)
-	pr.redis.Set(ctx, cacheKey, userJSON, 0)
-	pr.log.Infof("User saved to cache: %d", user.UserID)
+	if pr.redis != nil {
+		cacheKey := fmt.Sprintf("user:%d", user.UserID)
+		userJSON, _ := json.Marshal(user)
+		if err := pr.redis.Set(ctx, cacheKey, userJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save user to Redis: %v", err)
+		} else {
+			pr.log.Infof("User saved to cache: %s", cacheKey)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_users")
-	pr.log.Info("Invalidated cache for all users")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_users").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all users cache: %v", err)
+		}
+		pr.log.Info("Invalidated cache for all users")
+	}
 
 	// Return the newly created user (with any updated fields)
 	return user, nil
@@ -135,15 +166,22 @@ func (pr *userRepository) Update(ctx context.Context, user *User) (*User, error)
 		pr.log.Errorf("Error updating user: %v", err)
 		return nil, err
 	}
-	cacheKey := fmt.Sprintf("user:%d", user.UserID)
 
-	userJSON, _ := json.Marshal(user)
-	pr.redis.Set(ctx, cacheKey, userJSON, 0)
-	pr.log.Infof("User saved to cache: %d", user.UserID)
+	if pr.redis != nil {
+		cacheKey := fmt.Sprintf("user:%d", user.UserID)
+		userJSON, _ := json.Marshal(user)
+		if err := pr.redis.Set(ctx, cacheKey, userJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save user to Redis: %v", err)
+		} else {
+			pr.log.Infof("User saved to cache: %s", cacheKey)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_users")
-	pr.log.Info("Invalidated cache for all users")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_users").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all users cache: %v", err)
+		}
+		pr.log.Info("Invalidated cache for all users")
+	}
 
 	// Return the updated user
 	return user, nil
@@ -156,13 +194,19 @@ func (pr *userRepository) Delete(ctx context.Context, userID int64) error {
 		return err
 	}
 
-	cacheKey := fmt.Sprintf("user:%d", userID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("User deleted from cache: %d", userID)
+	if pr.redis != nil {
+		cacheKey := fmt.Sprintf("user:%d", userID)
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete user from Redis: %v", err)
+		}
+		pr.log.Infof("User deleted from cache: %d", userID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_users")
-	pr.log.Info("Invalidated cache for all users")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_users").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all users cache: %v", err)
+		}
+		pr.log.Info("Invalidated cache for all users")
+	}
 
 	return nil
 }

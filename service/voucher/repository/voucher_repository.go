@@ -42,12 +42,18 @@ func (pr *voucherRepository) Get(ctx context.Context, voucherID int64) (*Voucher
 	cacheKey := fmt.Sprintf("voucher:%d", voucherID)
 
 	// Try to get the voucher from Redis cache
-	cachedVoucher, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedVoucher), &voucher); err == nil {
-			pr.log.Infof("Voucher found in cache: %d", voucherID)
-			return &voucher, nil
+	if pr.redis != nil {
+		cachedVoucher, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedVoucher), &voucher); err == nil {
+				pr.log.Infof("Voucher found in cache: %d", voucherID)
+				return &voucher, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get voucher from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -56,10 +62,15 @@ func (pr *voucherRepository) Get(ctx context.Context, voucherID int64) (*Voucher
 		return nil, err
 	}
 
-	// Save to cache
-	voucherJSON, _ := json.Marshal(voucher)
-	pr.redis.Set(ctx, cacheKey, voucherJSON, 0)
-	pr.log.Infof("Voucher saved to cache: %d", voucherID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		voucherJSON, _ := json.Marshal(voucher)
+		if err := pr.redis.Set(ctx, cacheKey, voucherJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save voucher to Redis: %v", err)
+		} else {
+			pr.log.Infof("Voucher saved to cache: %d", voucherID)
+		}
+	}
 
 	return &voucher, nil
 }
@@ -70,12 +81,18 @@ func (pr *voucherRepository) GetAll(ctx context.Context) ([]*Voucher, error) {
 	cacheKey := "all_vouchers"
 
 	// Try to get the vouchers from Redis cache
-	cachedVouchers, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedVouchers), &vouchers); err == nil {
-			pr.log.Info("Vouchers found in cache")
-			return vouchers, nil
+	if pr.redis != nil {
+		cachedVouchers, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedVouchers), &vouchers); err == nil {
+				pr.log.Info("Vouchers found in cache")
+				return vouchers, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get vouchers from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -84,10 +101,15 @@ func (pr *voucherRepository) GetAll(ctx context.Context) ([]*Voucher, error) {
 		return nil, err
 	}
 
-	// Save to cache
-	vouchersJSON, _ := json.Marshal(vouchers)
-	pr.redis.Set(ctx, cacheKey, vouchersJSON, 0)
-	pr.log.Info("Vouchers saved to cache")
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		vouchersJSON, _ := json.Marshal(vouchers)
+		if err := pr.redis.Set(ctx, cacheKey, vouchersJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save vouchers to Redis: %v", err)
+		} else {
+			pr.log.Info("Vouchers saved to cache")
+		}
+	}
 
 	return vouchers, nil
 }
@@ -100,13 +122,22 @@ func (pr *voucherRepository) Create(ctx context.Context, voucher *Voucher) (*Vou
 	}
 	cacheKey := fmt.Sprintf("voucher:%d", voucher.VoucherID)
 
-	voucherJSON, _ := json.Marshal(voucher)
-	pr.redis.Set(ctx, cacheKey, voucherJSON, 0)
-	pr.log.Infof("Voucher saved to cache: %d", voucher.VoucherID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		voucherJSON, _ := json.Marshal(voucher)
+		if err := pr.redis.Set(ctx, cacheKey, voucherJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save voucher to Redis: %v", err)
+		} else {
+			pr.log.Infof("Voucher saved to cache: %d", voucher.VoucherID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_vouchers")
-	pr.log.Info("Invalidated cache for all vouchers")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_vouchers").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all vouchers cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all vouchers")
+		}
+	}
 
 	// Return the newly created voucher (with any updated fields)
 	return voucher, nil
@@ -120,13 +151,22 @@ func (pr *voucherRepository) Update(ctx context.Context, voucher *Voucher) (*Vou
 	}
 	cacheKey := fmt.Sprintf("voucher:%d", voucher.VoucherID)
 
-	voucherJSON, _ := json.Marshal(voucher)
-	pr.redis.Set(ctx, cacheKey, voucherJSON, 0)
-	pr.log.Infof("Voucher saved to cache: %d", voucher.VoucherID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		voucherJSON, _ := json.Marshal(voucher)
+		if err := pr.redis.Set(ctx, cacheKey, voucherJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save voucher to Redis: %v", err)
+		} else {
+			pr.log.Infof("Voucher saved to cache: %d", voucher.VoucherID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_vouchers")
-	pr.log.Info("Invalidated cache for all vouchers")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_vouchers").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all vouchers cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all vouchers")
+		}
+	}
 
 	// Return the updated voucher
 	return voucher, nil
@@ -140,12 +180,22 @@ func (pr *voucherRepository) Delete(ctx context.Context, voucherID int64) error 
 	}
 
 	cacheKey := fmt.Sprintf("voucher:%d", voucherID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("Voucher deleted from cache: %d", voucherID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_vouchers")
-	pr.log.Info("Invalidated cache for all vouchers")
+	// Delete from cache if Redis is available
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete voucher from Redis: %v", err)
+		} else {
+			pr.log.Infof("Voucher deleted from cache: %d", voucherID)
+		}
+
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_vouchers").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all vouchers cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all vouchers")
+		}
+	}
 
 	return nil
 }

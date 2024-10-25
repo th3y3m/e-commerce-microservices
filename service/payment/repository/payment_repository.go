@@ -41,12 +41,18 @@ func (pr *paymentRepository) Get(ctx context.Context, paymentID int64) (*Payment
 	cacheKey := fmt.Sprintf("payment:%d", paymentID)
 
 	// Try to get the payment from Redis cache
-	cachedPayment, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedPayment), &payment); err == nil {
-			pr.log.Infof("Payment found in cache: %d", paymentID)
-			return &payment, nil
+	if pr.redis != nil {
+		cachedPayment, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedPayment), &payment); err == nil {
+				pr.log.Infof("Payment found in cache: %d", paymentID)
+				return &payment, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get payment from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -55,10 +61,15 @@ func (pr *paymentRepository) Get(ctx context.Context, paymentID int64) (*Payment
 		return nil, err
 	}
 
-	// Save to cache
-	paymentJSON, _ := json.Marshal(payment)
-	pr.redis.Set(ctx, cacheKey, paymentJSON, 0)
-	pr.log.Infof("Payment saved to cache: %d", paymentID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		paymentJSON, _ := json.Marshal(payment)
+		if err := pr.redis.Set(ctx, cacheKey, paymentJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save payment to Redis: %v", err)
+		} else {
+			pr.log.Infof("Payment saved to cache: %d", paymentID)
+		}
+	}
 
 	return &payment, nil
 }
@@ -69,12 +80,18 @@ func (pr *paymentRepository) GetAll(ctx context.Context) ([]*Payment, error) {
 	cacheKey := "all_payments"
 
 	// Try to get the payments from Redis cache
-	cachedPayments, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedPayments), &payments); err == nil {
-			pr.log.Info("Payments found in cache")
-			return payments, nil
+	if pr.redis != nil {
+		cachedPayments, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedPayments), &payments); err == nil {
+				pr.log.Info("Payments found in cache")
+				return payments, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get payments from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -83,10 +100,15 @@ func (pr *paymentRepository) GetAll(ctx context.Context) ([]*Payment, error) {
 		return nil, err
 	}
 
-	// Save to cache
-	paymentsJSON, _ := json.Marshal(payments)
-	pr.redis.Set(ctx, cacheKey, paymentsJSON, 0)
-	pr.log.Info("Payments saved to cache")
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		paymentsJSON, _ := json.Marshal(payments)
+		if err := pr.redis.Set(ctx, cacheKey, paymentsJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save payments to Redis: %v", err)
+		} else {
+			pr.log.Info("Payments saved to cache")
+		}
+	}
 
 	return payments, nil
 }
@@ -99,13 +121,22 @@ func (pr *paymentRepository) Create(ctx context.Context, payment *Payment) (*Pay
 	}
 	cacheKey := fmt.Sprintf("payment:%d", payment.PaymentID)
 
-	paymentJSON, _ := json.Marshal(payment)
-	pr.redis.Set(ctx, cacheKey, paymentJSON, 0)
-	pr.log.Infof("Payment saved to cache: %d", payment.PaymentID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		paymentJSON, _ := json.Marshal(payment)
+		if err := pr.redis.Set(ctx, cacheKey, paymentJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save payment to Redis: %v", err)
+		} else {
+			pr.log.Infof("Payment saved to cache: %d", payment.PaymentID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_payments")
-	pr.log.Info("Invalidated cache for all payments")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_payments").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all payments cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all payments")
+		}
+	}
 
 	// Return the newly created payment (with any updated fields)
 	return payment, nil
@@ -119,13 +150,22 @@ func (pr *paymentRepository) Update(ctx context.Context, payment *Payment) (*Pay
 	}
 	cacheKey := fmt.Sprintf("payment:%d", payment.PaymentID)
 
-	paymentJSON, _ := json.Marshal(payment)
-	pr.redis.Set(ctx, cacheKey, paymentJSON, 0)
-	pr.log.Infof("Payment saved to cache: %d", payment.PaymentID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		paymentJSON, _ := json.Marshal(payment)
+		if err := pr.redis.Set(ctx, cacheKey, paymentJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save payment to Redis: %v", err)
+		} else {
+			pr.log.Infof("Payment saved to cache: %d", payment.PaymentID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_payments")
-	pr.log.Info("Invalidated cache for all payments")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_payments").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all payments cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all payments")
+		}
+	}
 
 	// Return the updated payment
 	return payment, nil
@@ -139,12 +179,22 @@ func (pr *paymentRepository) Delete(ctx context.Context, paymentID int64) error 
 	}
 
 	cacheKey := fmt.Sprintf("payment:%d", paymentID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("Payment deleted from cache: %d", paymentID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_payments")
-	pr.log.Info("Invalidated cache for all payments")
+	// Delete from cache if Redis is available
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete payment from Redis: %v", err)
+		} else {
+			pr.log.Infof("Payment deleted from cache: %d", paymentID)
+		}
+
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_payments").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all payments cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all payments")
+		}
+	}
 
 	return nil
 }

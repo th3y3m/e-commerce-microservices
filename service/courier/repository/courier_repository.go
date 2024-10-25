@@ -37,13 +37,19 @@ func (pr *courierRepository) Get(ctx context.Context, courierID int64) (*Courier
 	cacheKey := fmt.Sprintf("courier:%d", courierID)
 
 	// Try to get the courier from Redis cache
-	cachedCourier, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		var courier Courier
-		if err := json.Unmarshal([]byte(cachedCourier), &courier); err == nil {
-			pr.log.Infof("Courier found in cache: %+v", courier)
-			return &courier, nil
+	if pr.redis != nil {
+		cachedCourier, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			var courier Courier
+			if err := json.Unmarshal([]byte(cachedCourier), &courier); err == nil {
+				pr.log.Infof("Courier found in cache: %+v", courier)
+				return &courier, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get courier from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -54,10 +60,15 @@ func (pr *courierRepository) Get(ctx context.Context, courierID int64) (*Courier
 		return nil, result.Error
 	}
 
-	// Save to cache
-	courierJSON, _ := json.Marshal(courier)
-	pr.redis.Set(ctx, cacheKey, courierJSON, 0)
-	pr.log.Infof("Courier saved to cache: %d", courierID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		courierJSON, _ := json.Marshal(courier)
+		if err := pr.redis.Set(ctx, cacheKey, courierJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save courier to Redis: %v", err)
+		} else {
+			pr.log.Infof("Courier saved to cache: %d", courierID)
+		}
+	}
 
 	return &courier, nil
 }
@@ -67,13 +78,19 @@ func (pr *courierRepository) GetAll(ctx context.Context) ([]*Courier, error) {
 	cacheKey := "all_couriers"
 
 	// Try to get the couriers from Redis cache
-	cachedCouriers, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		var couriers []*Courier
-		if err := json.Unmarshal([]byte(cachedCouriers), &couriers); err == nil {
-			pr.log.Infof("Couriers found in cache: %+v", couriers)
-			return couriers, nil
+	if pr.redis != nil {
+		cachedCouriers, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			var couriers []*Courier
+			if err := json.Unmarshal([]byte(cachedCouriers), &couriers); err == nil {
+				pr.log.Infof("Couriers found in cache: %+v", couriers)
+				return couriers, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get couriers from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -84,10 +101,15 @@ func (pr *courierRepository) GetAll(ctx context.Context) ([]*Courier, error) {
 		return nil, result.Error
 	}
 
-	// Save to cache
-	couriersJSON, _ := json.Marshal(couriers)
-	pr.redis.Set(ctx, cacheKey, couriersJSON, 0)
-	pr.log.Info("Couriers saved to cache")
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		couriersJSON, _ := json.Marshal(couriers)
+		if err := pr.redis.Set(ctx, cacheKey, couriersJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save couriers to Redis: %v", err)
+		} else {
+			pr.log.Info("Couriers saved to cache")
+		}
+	}
 
 	return couriers, nil
 }
@@ -100,13 +122,22 @@ func (pr *courierRepository) Create(ctx context.Context, courier *Courier) (*Cou
 	}
 	cacheKey := fmt.Sprintf("courier:%d", courier.CourierID)
 
-	courierJSON, _ := json.Marshal(courier)
-	pr.redis.Set(ctx, cacheKey, courierJSON, 0)
-	pr.log.Infof("Courier saved to cache: %d", courier.CourierID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		courierJSON, _ := json.Marshal(courier)
+		if err := pr.redis.Set(ctx, cacheKey, courierJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save courier to Redis: %v", err)
+		} else {
+			pr.log.Infof("Courier saved to cache: %d", courier.CourierID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_couriers")
-	pr.log.Info("Invalidated cache for all couriers")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_couriers").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all couriers cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all couriers")
+		}
+	}
 
 	// Return the newly created courier (with any updated fields)
 	return courier, nil
@@ -120,14 +151,25 @@ func (pr *courierRepository) Update(ctx context.Context, courier *Courier) (*Cou
 	}
 
 	cacheKey := fmt.Sprintf("courier:%d", courier.CourierID)
-	courierJSON, _ := json.Marshal(courier)
-	pr.redis.Set(ctx, cacheKey, courierJSON, 0)
-	pr.log.Infof("Courier saved to cache: %d", courier.CourierID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_couriers")
-	pr.log.Info("Invalidated cache for all couriers")
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		courierJSON, _ := json.Marshal(courier)
+		if err := pr.redis.Set(ctx, cacheKey, courierJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save courier to Redis: %v", err)
+		} else {
+			pr.log.Infof("Courier saved to cache: %d", courier.CourierID)
+		}
 
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_couriers").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all couriers cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all couriers")
+		}
+	}
+
+	// Return the updated courier
 	return courier, nil
 }
 
@@ -140,12 +182,22 @@ func (pr *courierRepository) Delete(ctx context.Context, courierID int64) error 
 	}
 
 	cacheKey := fmt.Sprintf("courier:%d", courierID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("Courier deleted from cache: %d", courierID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_couriers")
-	pr.log.Info("Invalidated cache for all couriers")
+	// Delete from cache if Redis is available
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete courier from Redis: %v", err)
+		} else {
+			pr.log.Infof("Courier deleted from cache: %d", courierID)
+		}
+
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_couriers").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all couriers cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all couriers")
+		}
+	}
 
 	return nil
 }

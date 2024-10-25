@@ -255,7 +255,9 @@ func (pu *ProductUsecase) GetProductPriceAfterDiscount(ctx context.Context, req 
 
 	// Fetch the product discounts
 	url := constant.PRODUCT_DISCOUNT_SERVICE
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
 
 	request, err := http.NewRequest("GET", url, bytes.NewBuffer(data))
 	if err != nil {

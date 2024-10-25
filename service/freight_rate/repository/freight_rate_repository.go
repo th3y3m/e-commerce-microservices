@@ -38,12 +38,18 @@ func (pr *freightRateRepository) Get(ctx context.Context, freightRateID int64) (
 	cacheKey := fmt.Sprintf("freightRate:%d", freightRateID)
 
 	// Try to get the freightRate from Redis cache
-	cachedFreightRate, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedFreightRate), &freightRate); err == nil {
-			pr.log.Infof("FreightRate found in cache: %d", freightRateID)
-			return &freightRate, nil
+	if pr.redis != nil {
+		cachedFreightRate, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedFreightRate), &freightRate); err == nil {
+				pr.log.Infof("FreightRate found in cache: %d", freightRateID)
+				return &freightRate, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get freightRate from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -52,10 +58,15 @@ func (pr *freightRateRepository) Get(ctx context.Context, freightRateID int64) (
 		return nil, err
 	}
 
-	// Save to cache
-	freightRateJSON, _ := json.Marshal(freightRate)
-	pr.redis.Set(ctx, cacheKey, freightRateJSON, 0)
-	pr.log.Infof("FreightRate saved to cache: %d", freightRateID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		freightRateJSON, _ := json.Marshal(freightRate)
+		if err := pr.redis.Set(ctx, cacheKey, freightRateJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save freightRate to Redis: %v", err)
+		} else {
+			pr.log.Infof("FreightRate saved to cache: %d", freightRateID)
+		}
+	}
 
 	return &freightRate, nil
 }
@@ -66,12 +77,18 @@ func (pr *freightRateRepository) GetAll(ctx context.Context) ([]*FreightRate, er
 	cacheKey := "all_freightRates"
 
 	// Try to get the freightRates from Redis cache
-	cachedFreightRates, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedFreightRates), &freightRates); err == nil {
-			pr.log.Info("FreightRates found in cache")
-			return freightRates, nil
+	if pr.redis != nil {
+		cachedFreightRates, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedFreightRates), &freightRates); err == nil {
+				pr.log.Info("FreightRates found in cache")
+				return freightRates, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get freightRates from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -80,10 +97,15 @@ func (pr *freightRateRepository) GetAll(ctx context.Context) ([]*FreightRate, er
 		return nil, err
 	}
 
-	// Save to cache
-	freightRatesJSON, _ := json.Marshal(freightRates)
-	pr.redis.Set(ctx, cacheKey, freightRatesJSON, 0)
-	pr.log.Info("FreightRates saved to cache")
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		freightRatesJSON, _ := json.Marshal(freightRates)
+		if err := pr.redis.Set(ctx, cacheKey, freightRatesJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save freightRates to Redis: %v", err)
+		} else {
+			pr.log.Info("FreightRates saved to cache")
+		}
+	}
 
 	return freightRates, nil
 }
@@ -96,13 +118,22 @@ func (pr *freightRateRepository) Create(ctx context.Context, freightRate *Freigh
 	}
 	cacheKey := fmt.Sprintf("freightRate:%d", freightRate.FreightRateID)
 
-	freightRateJSON, _ := json.Marshal(freightRate)
-	pr.redis.Set(ctx, cacheKey, freightRateJSON, 0)
-	pr.log.Infof("FreightRate saved to cache: %d", freightRate.FreightRateID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		freightRateJSON, _ := json.Marshal(freightRate)
+		if err := pr.redis.Set(ctx, cacheKey, freightRateJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save freightRate to Redis: %v", err)
+		} else {
+			pr.log.Infof("FreightRate saved to cache: %d", freightRate.FreightRateID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_freightRates")
-	pr.log.Info("Invalidated cache for all freightRates")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_freightRates").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all freightRates cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all freightRates")
+		}
+	}
 
 	// Return the newly created freightRate (with any updated fields)
 	return freightRate, nil
@@ -116,13 +147,22 @@ func (pr *freightRateRepository) Update(ctx context.Context, freightRate *Freigh
 	}
 	cacheKey := fmt.Sprintf("freightRate:%d", freightRate.FreightRateID)
 
-	freightRateJSON, _ := json.Marshal(freightRate)
-	pr.redis.Set(ctx, cacheKey, freightRateJSON, 0)
-	pr.log.Infof("FreightRate saved to cache: %d", freightRate.FreightRateID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		freightRateJSON, _ := json.Marshal(freightRate)
+		if err := pr.redis.Set(ctx, cacheKey, freightRateJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save freightRate to Redis: %v", err)
+		} else {
+			pr.log.Infof("FreightRate saved to cache: %d", freightRate.FreightRateID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_freightRates")
-	pr.log.Info("Invalidated cache for all freightRates")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_freightRates").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all freightRates cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all freightRates")
+		}
+	}
 
 	// Return the updated freightRate
 	return freightRate, nil
@@ -136,12 +176,22 @@ func (pr *freightRateRepository) Delete(ctx context.Context, freightRateID int64
 	}
 
 	cacheKey := fmt.Sprintf("freightRate:%d", freightRateID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("FreightRate deleted from cache: %d", freightRateID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_freightRates")
-	pr.log.Info("Invalidated cache for all freightRates")
+	// Delete from cache if Redis is available
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete freightRate from Redis: %v", err)
+		} else {
+			pr.log.Infof("FreightRate deleted from cache: %d", freightRateID)
+		}
+
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_freightRates").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all freightRates cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all freightRates")
+		}
+	}
 
 	return nil
 }

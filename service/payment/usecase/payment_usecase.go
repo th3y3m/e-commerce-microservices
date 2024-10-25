@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"th3y3m/e-commerce-microservices/pkg/util"
 	"th3y3m/e-commerce-microservices/service/payment/model"
 	"th3y3m/e-commerce-microservices/service/payment/repository"
@@ -23,6 +24,7 @@ type IPaymentUsecase interface {
 	CreatePayment(ctx context.Context, req *model.CreatePaymentRequest) (*model.GetPaymentResponse, error)
 	UpdatePayment(ctx context.Context, rep *model.UpdatePaymentRequest) (*model.GetPaymentResponse, error)
 	GetPaymentList(ctx context.Context, req *model.GetPaymentsRequest) (*util.PaginatedList[model.GetPaymentResponse], error)
+	GetRevenue(ctx context.Context, day, month, year *int) ([]float64, error)
 }
 
 func NewPaymentUsecase(paymentRepo repository.IPaymentRepository, log *logrus.Logger) IPaymentUsecase {
@@ -170,4 +172,84 @@ func (pu *paymentUsecase) GetPaymentList(ctx context.Context, req *model.GetPaym
 
 	pu.log.Infof("Fetched %d payments", len(paymentResponses))
 	return list, nil
+}
+
+func (pu *paymentUsecase) GetRevenue(ctx context.Context, day, month, year *int) ([]float64, error) {
+	pu.log.Infof("Fetching revenue for day: %d, month: %d, year: %d", *day, *month, *year)
+	currentTime := time.Now()
+	var revenue []float64
+
+	if year != nil {
+		for i := currentTime.Year(); i >= *year; i-- {
+			model := &model.GetPaymentsRequest{
+				FromDate: time.Date(i, 1, 1, 0, 0, 0, 0, time.UTC),
+				ToDate:   time.Date(i, 12, 31, 23, 59, 59, 0, time.UTC),
+			}
+			yearsRevenue, err := pu.paymentRepo.GetList(ctx, model)
+			if err != nil {
+				pu.log.Errorf("Error fetching revenue for year %d: %v", i, err)
+				return nil, err
+			}
+			yearRevenue := yearsRevenue[0].PaymentAmount
+			revenue = append(revenue, yearRevenue)
+		}
+	} else if month != nil {
+		startYear := currentTime.Year()
+		startMonth := currentTime.Month()
+
+		for y := startYear; y >= startYear-1; y-- {
+			for m := startMonth; m >= time.Month(*month); m-- {
+				model := &model.GetPaymentsRequest{
+					FromDate: time.Date(y, m, 1, 0, 0, 0, 0, time.UTC),
+					ToDate:   time.Date(y, m, daysInMonth(y, m), 23, 59, 59, 0, time.UTC),
+				}
+				monthsRevenue, err := pu.paymentRepo.GetList(ctx, model)
+				if err != nil {
+					pu.log.Errorf("Error fetching revenue for month %d-%d: %v", m, y, err)
+					return nil, err
+				}
+				monthRevenue := monthsRevenue[0].PaymentAmount
+				revenue = append(revenue, monthRevenue)
+			}
+			startMonth = 12 // Reset to December for the previous year
+		}
+
+	} else if day != nil {
+		startYear := currentTime.Year()
+		startMonth := currentTime.Month()
+		startDay := currentTime.Day()
+
+		for y := startYear; y >= startYear-1; y-- {
+			for m := startMonth; m >= time.Month(1); m-- {
+				for d := startDay; d >= 1; d-- {
+					if y == startYear && m == startMonth && d < *day {
+						break
+					}
+
+					model := &model.GetPaymentsRequest{
+						FromDate: time.Date(y, m, d, 0, 0, 0, 0, time.UTC),
+						ToDate:   time.Date(y, m, d, 23, 59, 59, 0, time.UTC),
+					}
+					daysRevenue, err := pu.paymentRepo.GetList(ctx, model)
+					if err != nil {
+						pu.log.Errorf("Error fetching revenue for day %d-%d-%d: %v", d, m, y, err)
+						return nil, err
+					}
+					dayRevenue := daysRevenue[0].PaymentAmount
+					revenue = append(revenue, dayRevenue)
+				}
+				startDay = daysInMonth(y, m-1) // Reset to the last day of the previous month
+			}
+			startMonth = 12 // Reset to December for the previous year
+		}
+	} else {
+		pu.log.Errorf("No valid date parameter provided")
+		return nil, errors.New("no valid date parameter provided")
+	}
+
+	return revenue, nil
+}
+
+func daysInMonth(year int, month time.Month) int {
+	return time.Date(year, month+1, 0, 0, 0, 0, 0, time.UTC).Day()
 }

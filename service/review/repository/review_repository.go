@@ -41,12 +41,18 @@ func (pr *reviewRepository) Get(ctx context.Context, reviewID int64) (*Review, e
 	cacheKey := fmt.Sprintf("review:%d", reviewID)
 
 	// Try to get the review from Redis cache
-	cachedReview, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedReview), &review); err == nil {
-			pr.log.Infof("Review found in cache: %d", reviewID)
-			return &review, nil
+	if pr.redis != nil {
+		cachedReview, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedReview), &review); err == nil {
+				pr.log.Infof("Review found in cache: %d", reviewID)
+				return &review, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get review from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -55,10 +61,15 @@ func (pr *reviewRepository) Get(ctx context.Context, reviewID int64) (*Review, e
 		return nil, err
 	}
 
-	// Save to cache
-	reviewJSON, _ := json.Marshal(review)
-	pr.redis.Set(ctx, cacheKey, reviewJSON, 0)
-	pr.log.Infof("Review saved to cache: %d", reviewID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		reviewJSON, _ := json.Marshal(review)
+		if err := pr.redis.Set(ctx, cacheKey, reviewJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save review to Redis: %v", err)
+		} else {
+			pr.log.Infof("Review saved to cache: %d", reviewID)
+		}
+	}
 
 	return &review, nil
 }
@@ -69,12 +80,18 @@ func (pr *reviewRepository) GetAll(ctx context.Context) ([]*Review, error) {
 	cacheKey := "all_reviews"
 
 	// Try to get the reviews from Redis cache
-	cachedReviews, err := pr.redis.Get(ctx, cacheKey).Result()
-	if err == nil {
-		if err := json.Unmarshal([]byte(cachedReviews), &reviews); err == nil {
-			pr.log.Info("Reviews found in cache")
-			return reviews, nil
+	if pr.redis != nil {
+		cachedReviews, err := pr.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(cachedReviews), &reviews); err == nil {
+				pr.log.Info("Reviews found in cache")
+				return reviews, nil
+			}
+		} else if err != redis.Nil {
+			pr.log.Warnf("Failed to get reviews from Redis: %v", err)
 		}
+	} else {
+		pr.log.Warn("Redis client is not initialized")
 	}
 
 	// If not found in cache, get from database
@@ -83,10 +100,15 @@ func (pr *reviewRepository) GetAll(ctx context.Context) ([]*Review, error) {
 		return nil, err
 	}
 
-	// Save to cache
-	reviewsJSON, _ := json.Marshal(reviews)
-	pr.redis.Set(ctx, cacheKey, reviewsJSON, 0)
-	pr.log.Info("Reviews saved to cache")
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		reviewsJSON, _ := json.Marshal(reviews)
+		if err := pr.redis.Set(ctx, cacheKey, reviewsJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save reviews to Redis: %v", err)
+		} else {
+			pr.log.Info("Reviews saved to cache")
+		}
+	}
 
 	return reviews, nil
 }
@@ -99,13 +121,22 @@ func (pr *reviewRepository) Create(ctx context.Context, review *Review) (*Review
 	}
 	cacheKey := fmt.Sprintf("review:%d", review.ReviewID)
 
-	reviewJSON, _ := json.Marshal(review)
-	pr.redis.Set(ctx, cacheKey, reviewJSON, 0)
-	pr.log.Infof("Review saved to cache: %d", review.ReviewID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		reviewJSON, _ := json.Marshal(review)
+		if err := pr.redis.Set(ctx, cacheKey, reviewJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save review to Redis: %v", err)
+		} else {
+			pr.log.Infof("Review saved to cache: %d", review.ReviewID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_reviews")
-	pr.log.Info("Invalidated cache for all reviews")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_reviews").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all reviews cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all reviews")
+		}
+	}
 
 	// Return the newly created review (with any updated fields)
 	return review, nil
@@ -119,13 +150,22 @@ func (pr *reviewRepository) Update(ctx context.Context, review *Review) (*Review
 	}
 	cacheKey := fmt.Sprintf("review:%d", review.ReviewID)
 
-	reviewJSON, _ := json.Marshal(review)
-	pr.redis.Set(ctx, cacheKey, reviewJSON, 0)
-	pr.log.Infof("Review saved to cache: %d", review.ReviewID)
+	// Save to cache if Redis is available
+	if pr.redis != nil {
+		reviewJSON, _ := json.Marshal(review)
+		if err := pr.redis.Set(ctx, cacheKey, reviewJSON, 0).Err(); err != nil {
+			pr.log.Warnf("Failed to save review to Redis: %v", err)
+		} else {
+			pr.log.Infof("Review saved to cache: %d", review.ReviewID)
+		}
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_reviews")
-	pr.log.Info("Invalidated cache for all reviews")
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_reviews").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all reviews cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all reviews")
+		}
+	}
 
 	// Return the updated review
 	return review, nil
@@ -139,12 +179,22 @@ func (pr *reviewRepository) Delete(ctx context.Context, reviewID int64) error {
 	}
 
 	cacheKey := fmt.Sprintf("review:%d", reviewID)
-	pr.redis.Del(ctx, cacheKey)
-	pr.log.Infof("Review deleted from cache: %d", reviewID)
 
-	// Invalidate the cache for all records
-	pr.redis.Del(ctx, "all_reviews")
-	pr.log.Info("Invalidated cache for all reviews")
+	// Delete from cache if Redis is available
+	if pr.redis != nil {
+		if err := pr.redis.Del(ctx, cacheKey).Err(); err != nil {
+			pr.log.Warnf("Failed to delete review from Redis: %v", err)
+		} else {
+			pr.log.Infof("Review deleted from cache: %d", reviewID)
+		}
+
+		// Invalidate the cache for all records
+		if err := pr.redis.Del(ctx, "all_reviews").Err(); err != nil {
+			pr.log.Warnf("Failed to invalidate all reviews cache: %v", err)
+		} else {
+			pr.log.Info("Invalidated cache for all reviews")
+		}
+	}
 
 	return nil
 }

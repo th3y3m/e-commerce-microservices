@@ -12,10 +12,12 @@ import (
 
 func NewProductRepositoryProvider() repository.IProductRepository {
 	log := logrus.New()
+
 	db, err := postgresql.NewGormDB()
 	if err != nil {
 		log.Error(err)
 	}
+
 	redis, err := redis_client.ConnectToRedis()
 	if err != nil {
 		log.Error(err)
@@ -23,7 +25,7 @@ func NewProductRepositoryProvider() repository.IProductRepository {
 
 	es, err := elasticsearch_server.ConnectToElasticsearch()
 	if err != nil {
-		log.Fatalf("Error creating the client: %s", err)
+		log.Error(err)
 	}
 
 	// es, err := elasticsearch.NewDefaultClient()
