@@ -80,13 +80,30 @@ func CreateIndex(es *elasticsearch.Client, indexName string) error {
 						"encoder": "doublemetaphone",
 						"replace": false,
 					},
+					"word_delimiter_custom": map[string]interface{}{
+						"type":                  "word_delimiter_graph",
+						"generate_word_parts":   true,
+						"generate_number_parts": true,
+						"catenate_words":        true,
+						"catenate_numbers":      true,
+						"catenate_all":          true,
+						"preserve_original":     true,
+						"split_on_case_change":  false, // Changed to false
+					},
+					"ngram_filter": map[string]interface{}{
+						"type":     "ngram",
+						"min_gram": 3,
+						"max_gram": 20,
+					},
 				},
 				"analyzer": map[string]interface{}{
-					"my_phonetic_analyzer": map[string]interface{}{
-						"tokenizer": "standard",
+					"my_custom_analyzer": map[string]interface{}{
+						"tokenizer": "whitespace",
 						"filter": []string{
 							"lowercase",
+							"word_delimiter_custom",
 							"my_phonetic_filter",
+							"ngram_filter",
 						},
 					},
 				},
@@ -95,14 +112,15 @@ func CreateIndex(es *elasticsearch.Client, indexName string) error {
 		"mappings": map[string]interface{}{
 			"properties": map[string]interface{}{
 				"ProductName": map[string]interface{}{
-					"type": "text",
+					"type":     "text",
+					"analyzer": "my_custom_analyzer",
 					"fields": map[string]interface{}{
-						"phonetic": map[string]interface{}{ // Phonetic subfield
-							"type":     "text",
-							"analyzer": "my_phonetic_analyzer",
-						},
-						"keyword": map[string]interface{}{ // Exact match subfield
+						"raw": map[string]interface{}{
 							"type": "keyword",
+						},
+						"folded": map[string]interface{}{
+							"type":     "text",
+							"analyzer": "my_custom_analyzer",
 						},
 					},
 				},

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"th3y3m/e-commerce-microservices/pkg/elasticsearch_server"
 	"th3y3m/e-commerce-microservices/service/product/model"
 
@@ -369,28 +370,57 @@ func (pr *productRepository) searchProducts(ctx context.Context, name string) ([
 				"should": []map[string]interface{}{
 					{
 						"match": map[string]interface{}{
-							"ProductName": name, // Exact match
+							"ProductName": map[string]interface{}{
+								"query":     name,
+								"fuzziness": "AUTO",
+								"operator":  "OR",
+							},
 						},
 					},
 					{
 						"match": map[string]interface{}{
 							"ProductName.phonetic": map[string]interface{}{
 								"query":     name,
-								"fuzziness": "AUTO", // Fuzzy match on phonetic field
+								"fuzziness": "AUTO",
 							},
 						},
 					},
 					{
 						"match_phrase": map[string]interface{}{
-							"ProductName": name, // Phrase match
+							"ProductName": map[string]interface{}{
+								"query": name,
+								"slop":  1, // Allows for words to be one position apart
+							},
 						},
 					},
 					{
 						"wildcard": map[string]interface{}{
-							"ProductName": fmt.Sprintf("*%s*", name), // Wildcard match
+							"ProductName": fmt.Sprintf("*%s*", name),
+						},
+					},
+					// Add these new conditions
+					{
+						"wildcard": map[string]interface{}{
+							"ProductName": fmt.Sprintf("*%s*", strings.Replace(name, "-", "", -1)),
+						},
+					},
+					{
+						"wildcard": map[string]interface{}{
+							"ProductName": fmt.Sprintf("*%s*", strings.Replace(name, "-", " ", -1)),
+						},
+					},
+					{
+						"match": map[string]interface{}{
+							"ProductName": strings.Replace(name, "-", "", -1),
+						},
+					},
+					{
+						"match": map[string]interface{}{
+							"ProductName": strings.Replace(name, "-", " ", -1),
 						},
 					},
 				},
+				"minimum_should_match": 1,
 			},
 		},
 	}
