@@ -202,7 +202,7 @@ func (pu *ProductUsecase) GetProductList(ctx context.Context, req *model.GetProd
 		})
 		if err != nil {
 			pu.log.Errorf("Error fetching product price after discount: %v", err)
-			return nil, err
+			price = product.Price
 		}
 		productResponses = append(productResponses, model.GetProductListResponse{
 			ProductID:       product.ProductID,
@@ -250,7 +250,7 @@ func (pu *ProductUsecase) GetProductPriceAfterDiscount(ctx context.Context, req 
 	data, err := json.Marshal(productDiscountsRequest)
 	if err != nil {
 		pu.log.Errorf("Failed to marshal product discounts request: %v", err)
-		return 0, err
+		return product.Price, err
 	}
 
 	// Fetch the product discounts
@@ -261,12 +261,12 @@ func (pu *ProductUsecase) GetProductPriceAfterDiscount(ctx context.Context, req 
 
 	request, err := http.NewRequest("GET", url, bytes.NewBuffer(data))
 	if err != nil {
-		return 0, fmt.Errorf("failed to create request: %w", err)
+		return product.Price, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := client.Do(request)
 	if err != nil {
-		return 0, fmt.Errorf("failed to execute request: %w", err)
+		return product.Price, fmt.Errorf("failed to execute request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -275,12 +275,12 @@ func (pu *ProductUsecase) GetProductPriceAfterDiscount(ctx context.Context, req 
 			pu.log.Infof("No discounts found for product with ID: %d", req.ProductID)
 			return product.Price, nil
 		}
-		return 0, fmt.Errorf("product discount service returned non-OK status: %d", resp.StatusCode)
+		return product.Price, fmt.Errorf("product discount service returned non-OK status: %d", resp.StatusCode)
 	}
 
 	var productDiscounts []*model.ProductDiscount
 	if err := json.NewDecoder(resp.Body).Decode(&productDiscounts); err != nil {
-		return 0, fmt.Errorf("failed to decode product discounts response: %w", err)
+		return product.Price, fmt.Errorf("failed to decode product discounts response: %w", err)
 	}
 
 	var percentageDiscounts []float64
@@ -291,34 +291,34 @@ func (pu *ProductUsecase) GetProductPriceAfterDiscount(ctx context.Context, req 
 
 		request, err := http.NewRequest("GET", url, nil)
 		if err != nil {
-			return 0, fmt.Errorf("failed to create discount request: %w", err)
+			return product.Price, fmt.Errorf("failed to create discount request: %w", err)
 		}
 
 		resp, err := client.Do(request)
 		if err != nil {
-			return 0, fmt.Errorf("failed to execute discount request: %w", err)
+			return product.Price, fmt.Errorf("failed to execute discount request: %w", err)
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			return 0, fmt.Errorf("discount service returned non-OK status: %d", resp.StatusCode)
+			return product.Price, fmt.Errorf("discount service returned non-OK status: %d", resp.StatusCode)
 		}
 
 		var discountEvent model.GetDiscountResponse
 		if err := json.NewDecoder(resp.Body).Decode(&discountEvent); err != nil {
-			return 0, fmt.Errorf("failed to decode discount response: %w", err)
+			return product.Price, fmt.Errorf("failed to decode discount response: %w", err)
 		}
 
 		startDate, err := time.Parse(tsCreateTimeLayout, discountEvent.StartDate)
 		if err != nil {
 			pu.log.Errorf("Error parsing start date: %v", err)
-			return 0, err
+			return product.Price, err
 		}
 
 		endDate, err := time.Parse(tsCreateTimeLayout, discountEvent.EndDate)
 		if err != nil {
 			pu.log.Errorf("Error parsing end date: %v", err)
-			return 0, err
+			return product.Price, err
 		}
 
 		if !discountEvent.IsDeleted && startDate.Before(time.Now()) && endDate.After(time.Now()) {

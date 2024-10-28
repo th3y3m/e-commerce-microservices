@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"th3y3m/e-commerce-microservices/pkg/elasticsearch_server"
 	"th3y3m/e-commerce-microservices/service/product/model"
 
 	"github.com/elastic/go-elasticsearch/v7"
@@ -297,7 +299,27 @@ func (pr *productRepository) GetList(ctx context.Context, req *model.GetProducts
 		return products, nil
 	}
 
-	// Index the products to Elasticsearch
+	// Ensure the index exists
+	if err := elasticsearch_server.CreateIndex(pr.elasticClient, "products"); err != nil {
+		pr.log.Errorf("Error creating index or index already exists: %v", err)
+	}
+
+	err := pr.indexProducts(products)
+	if err != nil {
+		pr.log.Errorf("Error indexing products to Elasticsearch: %v", err)
+	}
+
+	if req.ProductName != "" {
+		products, err = pr.searchProducts(ctx, req.ProductName)
+		if err != nil {
+			pr.log.Errorf("Error searching products in Elasticsearch: %v", err)
+		}
+	}
+
+	return products, nil
+}
+
+func (pr *productRepository) indexProducts(products []*Product) error {
 	for _, product := range products {
 		productJSON, err := json.Marshal(product)
 		if err != nil {
@@ -305,7 +327,7 @@ func (pr *productRepository) GetList(ctx context.Context, req *model.GetProducts
 			continue
 		}
 
-		pr.log.Infof("Indexing product %d to Elasticsearch: %s", product.ProductID, string(productJSON))
+		pr.log.Infof("Indexing productID %d to Elasticsearch: %s", product.ProductID, string(productJSON))
 
 		res, err := pr.elasticClient.Index(
 			"products", // Use your Elasticsearch index name
@@ -316,13 +338,10 @@ func (pr *productRepository) GetList(ctx context.Context, req *model.GetProducts
 			pr.log.Errorf("Error indexing product %d: %v", product.ProductID, err)
 			continue
 		}
-		defer res.Body.Close()
-
-		// Log the Elasticsearch response status
-		pr.log.Infof("Elasticsearch indexing response status: %s", res.Status())
 
 		// Read the full response body
 		bodyBytes, err := io.ReadAll(res.Body)
+		res.Body.Close() // Close the response body immediately
 		if err != nil {
 			pr.log.Errorf("Failed to read Elasticsearch indexing response body: %v", err)
 			continue
@@ -336,103 +355,103 @@ func (pr *productRepository) GetList(ctx context.Context, req *model.GetProducts
 			continue
 		}
 
-		pr.log.Infof("Product %d indexed to Elasticsearch", product.ProductID)
+		pr.log.Infof("ProductID %d indexed to Elasticsearch", product.ProductID)
 	}
+	return nil
+}
 
-	// Now perform a search in Elasticsearch if ProductName is provided
-	if req.ProductName != "" {
-		pr.log.Infof("Searching for products with name: %s", req.ProductName)
+func (pr *productRepository) searchProducts(ctx context.Context, name string) ([]*Product, error) {
+	pr.log.Infof("Searching for products with name: %s", name)
 
-		// Build Elasticsearch query to search for ProductName with multiple match types
-		searchQuery := map[string]interface{}{
-			"query": map[string]interface{}{
-				"bool": map[string]interface{}{
-					"should": []map[string]interface{}{
-						{
-							"match": map[string]interface{}{
-								"ProductName": req.ProductName, // Exact match
+	searchQuery := map[string]interface{}{
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"should": []map[string]interface{}{
+					{
+						"match": map[string]interface{}{
+							"ProductName": name, // Exact match
+						},
+					},
+					{
+						"match": map[string]interface{}{
+							"ProductName.phonetic": map[string]interface{}{
+								"query":     name,
+								"fuzziness": "AUTO", // Fuzzy match on phonetic field
 							},
 						},
-						{
-							"match": map[string]interface{}{
-								"ProductName": map[string]interface{}{
-									"query":     req.ProductName,
-									"fuzziness": "AUTO", // Fuzzy match
-								},
-							},
+					},
+					{
+						"match_phrase": map[string]interface{}{
+							"ProductName": name, // Phrase match
 						},
-						{
-							"match_phrase": map[string]interface{}{
-								"ProductName": req.ProductName, // Phrase match
-							},
-						},
-						{
-							"wildcard": map[string]interface{}{
-								"ProductName": fmt.Sprintf("*%s*", req.ProductName), // Wildcard match
-							},
+					},
+					{
+						"wildcard": map[string]interface{}{
+							"ProductName": fmt.Sprintf("*%s*", name), // Wildcard match
 						},
 					},
 				},
 			},
-		}
-
-		// Serialize the search query to JSON
-		queryJSON, err := json.Marshal(searchQuery)
-		if err != nil {
-			pr.log.Errorf("Error marshaling search query: %v", err)
-			return nil, err
-		}
-
-		// Log the search query
-		pr.log.Infof("Elasticsearch search query: %s", string(queryJSON))
-
-		// Execute the search request to Elasticsearch
-		res, err := pr.elasticClient.Search(
-			pr.elasticClient.Search.WithContext(ctx),
-			pr.elasticClient.Search.WithIndex("products"), // Elasticsearch index name
-			pr.elasticClient.Search.WithBody(bytes.NewReader(queryJSON)),
-			pr.elasticClient.Search.WithTrackTotalHits(true),
-		)
-		if err != nil {
-			pr.log.Errorf("Error executing Elasticsearch search: %v", err)
-			return nil, err
-		}
-		defer res.Body.Close()
-
-		// Log the Elasticsearch response status
-		pr.log.Infof("Elasticsearch response status: %s", res.Status())
-
-		// Read the full response body
-		bodyBytes, err := io.ReadAll(res.Body)
-		if err != nil {
-			pr.log.Errorf("Failed to read Elasticsearch response body: %v", err)
-			return nil, err
-		}
-
-		// Log the full response body
-		pr.log.Infof("Elasticsearch response body: %s", string(bodyBytes))
-
-		// Parse the Elasticsearch response
-		var esResponse struct {
-			Hits struct {
-				Hits []struct {
-					Source Product `json:"_source"`
-				} `json:"hits"`
-			} `json:"hits"`
-		}
-		if err := json.Unmarshal(bodyBytes, &esResponse); err != nil {
-			pr.log.Errorf("Error decoding Elasticsearch response: %v", err)
-			return nil, err
-		}
-
-		// Collect products from Elasticsearch response
-		products = make([]*Product, 0)
-		for _, hit := range esResponse.Hits.Hits {
-			products = append(products, &hit.Source)
-		}
-
-		pr.log.Infof("Found %d products from Elasticsearch", len(products))
+		},
 	}
 
+	log.Printf("Elasticsearch search query: %v", searchQuery)
+
+	// Serialize the search query to JSON
+	queryJSON, err := json.Marshal(searchQuery)
+	if err != nil {
+		pr.log.Errorf("Error marshaling search query: %v", err)
+		return nil, err
+	}
+
+	// Log the search query
+	pr.log.Infof("Elasticsearch search query: %s", string(queryJSON))
+
+	// Execute the search request to Elasticsearch
+	res, err := pr.elasticClient.Search(
+		pr.elasticClient.Search.WithContext(ctx),
+		pr.elasticClient.Search.WithIndex("products"), // Elasticsearch index name
+		pr.elasticClient.Search.WithBody(bytes.NewReader(queryJSON)),
+		pr.elasticClient.Search.WithTrackTotalHits(true),
+	)
+	if err != nil {
+		pr.log.Errorf("Error executing Elasticsearch search: %v", err)
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	// Log the Elasticsearch response status
+	pr.log.Infof("Elasticsearch response status: %s", res.Status())
+
+	// Read the full response body
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		pr.log.Errorf("Failed to read Elasticsearch response body: %v", err)
+		return nil, err
+	}
+
+	// Log the full response body
+	pr.log.Infof("Elasticsearch response body: %s", string(bodyBytes))
+
+	// Parse the Elasticsearch response
+	var esResponse struct {
+		Hits struct {
+			Hits []struct {
+				Source Product `json:"_source"`
+			} `json:"hits"`
+		} `json:"hits"`
+	}
+	if err := json.Unmarshal(bodyBytes, &esResponse); err != nil {
+		pr.log.Errorf("Error decoding Elasticsearch response: %v", err)
+		return nil, err
+	}
+
+	// Collect products from Elasticsearch response
+	products := make([]*Product, 0)
+	for _, hit := range esResponse.Hits.Hits {
+		products = append(products, &hit.Source)
+	}
+
+	pr.log.Infof("Found %d products from Elasticsearch", len(products))
 	return products, nil
 }
