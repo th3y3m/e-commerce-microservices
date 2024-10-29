@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"strings"
 	"th3y3m/e-commerce-microservices/pkg/elasticsearch_server"
 	"th3y3m/e-commerce-microservices/service/product/model"
 
@@ -389,34 +388,13 @@ func (pr *productRepository) searchProducts(ctx context.Context, name string) ([
 						"match_phrase": map[string]interface{}{
 							"ProductName": map[string]interface{}{
 								"query": name,
-								"slop":  1, // Allows for words to be one position apart
+								"slop":  1,
 							},
 						},
 					},
 					{
 						"wildcard": map[string]interface{}{
 							"ProductName": fmt.Sprintf("*%s*", name),
-						},
-					},
-					// Add these new conditions
-					{
-						"wildcard": map[string]interface{}{
-							"ProductName": fmt.Sprintf("*%s*", strings.Replace(name, "-", "", -1)),
-						},
-					},
-					{
-						"wildcard": map[string]interface{}{
-							"ProductName": fmt.Sprintf("*%s*", strings.Replace(name, "-", " ", -1)),
-						},
-					},
-					{
-						"match": map[string]interface{}{
-							"ProductName": strings.Replace(name, "-", "", -1),
-						},
-					},
-					{
-						"match": map[string]interface{}{
-							"ProductName": strings.Replace(name, "-", " ", -1),
 						},
 					},
 				},

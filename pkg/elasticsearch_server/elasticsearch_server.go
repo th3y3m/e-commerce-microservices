@@ -73,6 +73,9 @@ func CreateIndex(es *elasticsearch.Client, indexName string) error {
 	// Define index settings and mappings
 	indexSettings := map[string]interface{}{
 		"settings": map[string]interface{}{
+			"index": map[string]interface{}{
+				"max_ngram_diff": 17, // Allow for a larger n-gram difference
+			},
 			"analysis": map[string]interface{}{
 				"filter": map[string]interface{}{
 					"my_phonetic_filter": map[string]interface{}{
@@ -80,6 +83,40 @@ func CreateIndex(es *elasticsearch.Client, indexName string) error {
 						"encoder": "doublemetaphone",
 						"replace": false,
 					},
+					"synonym_filter_1": map[string]interface{}{
+						"type": "synonym",
+						"synonyms": []string{
+							"laptop, notebook, portable computer",
+						},
+					},
+					"synonym_filter_2": map[string]interface{}{
+						"type": "synonym",
+						"synonyms": []string{
+							"nokia, mobile phone, cellphone",
+						},
+					},
+					"synonym_filter_3": map[string]interface{}{
+						"type": "synonym",
+						"synonyms": []string{
+							"computer, pc, desktop",
+						},
+					},
+					// "synonym_filter": map[string]interface{}{
+					// 	"type": "synonym",
+					// 	"synonyms": []string{
+					// 		"café, cafe, coffee shop",
+					// 		"laptop, notebook, portable computer",
+					// 		"nokia, mobile phone, cellphone",
+					// 		"computer, pc, desktop",
+					// 		"clothes, clothing, apparel",
+					// 		"book, novel, paperback",
+					// 		"bag, backpack, purse, handbag",
+					// 		"shoes, sneakers, footwear, boots",
+					// 		"iphone, smartphone, mobile phone",
+					// 		"shirt, top, blouse",
+					// 		"t-shirt, tee, tee shirt",
+					// 	},
+					// },
 					"word_delimiter_custom": map[string]interface{}{
 						"type":                  "word_delimiter_graph",
 						"generate_word_parts":   true,
@@ -88,12 +125,21 @@ func CreateIndex(es *elasticsearch.Client, indexName string) error {
 						"catenate_numbers":      true,
 						"catenate_all":          true,
 						"preserve_original":     true,
-						"split_on_case_change":  false, // Changed to false
+						"split_on_case_change":  false,
 					},
 					"ngram_filter": map[string]interface{}{
 						"type":     "ngram",
 						"min_gram": 3,
 						"max_gram": 20,
+					},
+					"my_stemmer": map[string]interface{}{
+						"type":     "stemmer",
+						"language": "english",
+					},
+					"shingle_filter": map[string]interface{}{
+						"type":             "shingle",
+						"min_shingle_size": 2,
+						"max_shingle_size": 3,
 					},
 				},
 				"analyzer": map[string]interface{}{
@@ -101,9 +147,14 @@ func CreateIndex(es *elasticsearch.Client, indexName string) error {
 						"tokenizer": "whitespace",
 						"filter": []string{
 							"lowercase",
+							"synonym_filter_1",
+							"synonym_filter_2",
+							"synonym_filter_3",
 							"word_delimiter_custom",
 							"my_phonetic_filter",
 							"ngram_filter",
+							"my_stemmer",
+							"shingle_filter",
 						},
 					},
 				},
