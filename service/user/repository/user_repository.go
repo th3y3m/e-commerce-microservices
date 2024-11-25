@@ -78,6 +78,11 @@ func (pr *userRepository) Get(ctx context.Context, userID *int64, email string) 
 
 	if err := query.Error; err != nil {
 		pr.log.Errorf("Error fetching user from database: %v", err)
+
+		// Return nil if the user is not found
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 

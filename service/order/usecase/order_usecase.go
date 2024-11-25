@@ -34,6 +34,7 @@ type IOrderUsecase interface {
 	ProcessOrder(ctx context.Context, userId, cartId, CourierID, VoucherID int64, shipAddress, paymentMethod string, freight float64) (*model.GetOrderResponse, error)
 	ProcessPayment(ctx context.Context, order *model.GetOrderResponse, paymentMethod string) (string, error)
 	PlaceOrder(ctx context.Context, userId, cartId, CourierID, VoucherID int64, paymentMethod, shipAddress string, freight float64) (string, error)
+	CancelOrder(ctx context.Context, orderID int64) error
 }
 
 func NewOrderUsecase(orderRepo repository.IOrderRepository, log *logrus.Logger) IOrderUsecase {
@@ -41,6 +42,26 @@ func NewOrderUsecase(orderRepo repository.IOrderRepository, log *logrus.Logger) 
 		orderRepo: orderRepo,
 		log:       log,
 	}
+}
+
+func (pu *orderUsecase) CancelOrder(ctx context.Context, orderID int64) error {
+	pu.log.Infof("Cancelling order with ID: %d", orderID)
+	order, err := pu.orderRepo.Get(ctx, orderID)
+	if err != nil {
+		pu.log.Errorf("Error fetching order for cancellation: %v", err)
+		return err
+	}
+
+	order.OrderStatus = constant.ORDER_STATUS_CANCELLED
+
+	_, err = pu.orderRepo.Update(ctx, order)
+	if err != nil {
+		pu.log.Errorf("Error updating order for cancellation: %v", err)
+		return err
+	}
+
+	pu.log.Infof("Cancelled order with ID: %d", orderID)
+	return nil
 }
 
 func (pu *orderUsecase) GetOrder(ctx context.Context, req *model.GetOrderRequest) (*model.GetOrderResponse, error) {
@@ -282,6 +303,26 @@ func (o *orderUsecase) PlaceOrder(ctx context.Context, userId, cartId, CourierID
 
 	return paymentURL, nil
 }
+
+// func AutomaticFailedOrder(ctx context.Context, orderID int64, duration time.Duration) {
+// 	select {
+// 	case <-time.After(duration):
+// 		isPaid, err := CheckPaymentStatus(orderID)
+// 		if err != nil {
+// 			// Log the error if necessary
+// 			return
+// 		}
+
+// 		if !isPaid {
+// 			// If the payment failed, cancel the order and return products to inventory
+// 			err = CancelOrder(ctx, orderID)
+// 			if err != nil {
+// 				// Handle error (log it or notify)
+// 				return
+// 			}
+// 		}
+// 	}
+// }
 
 func (o *orderUsecase) ProcessOrder(ctx context.Context, userId, cartId, CourierID, VoucherID int64, shipAddress, paymentMethod string, freight float64) (*model.GetOrderResponse, error) {
 	client := &http.Client{}

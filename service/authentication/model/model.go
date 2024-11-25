@@ -48,11 +48,12 @@ type User struct {
 	IsDeleted    bool      `json:"is_deleted"`
 }
 type CreateUserRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Role     string `json:"role"`
-	ImageURL string `json:"image_url"`
-	Provider string `json:"provider"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	Role       string `json:"role"`
+	ImageURL   string `json:"image_url"`
+	Provider   string `json:"provider"`
+	IsVerified *bool  `json:"is_verified"`
 }
 type OrderDetail struct {
 	OrderID   int64   `json:"order_id"`

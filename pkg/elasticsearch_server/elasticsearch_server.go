@@ -101,22 +101,6 @@ func CreateIndex(es *elasticsearch.Client, indexName string) error {
 							"computer, pc, desktop",
 						},
 					},
-					// "synonym_filter": map[string]interface{}{
-					// 	"type": "synonym",
-					// 	"synonyms": []string{
-					// 		"café, cafe, coffee shop",
-					// 		"laptop, notebook, portable computer",
-					// 		"nokia, mobile phone, cellphone",
-					// 		"computer, pc, desktop",
-					// 		"clothes, clothing, apparel",
-					// 		"book, novel, paperback",
-					// 		"bag, backpack, purse, handbag",
-					// 		"shoes, sneakers, footwear, boots",
-					// 		"iphone, smartphone, mobile phone",
-					// 		"shirt, top, blouse",
-					// 		"t-shirt, tee, tee shirt",
-					// 	},
-					// },
 					"word_delimiter_custom": map[string]interface{}{
 						"type":                  "word_delimiter_graph",
 						"generate_word_parts":   true,

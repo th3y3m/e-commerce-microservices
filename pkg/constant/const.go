@@ -58,7 +58,7 @@ const PAYMENT_STATUS_FAILED = "Failed"
 const ORDER_STATUS_PENDING = "Pending"
 const ORDER_STATUS_COMPLETED = "Completed"
 const ORDER_STATUS_FAILED = "Failed"
-const ORDER_STATUS_CANCELED = "Canceled"
+const ORDER_STATUS_CANCELLED = "Cancelled"
 
 const PAYMENT_METHOD_MOMO = "MoMo"
 const PAYMENT_METHOD_VNPAY = "VnPay"

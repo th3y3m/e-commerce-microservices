@@ -220,7 +220,7 @@ func (pu *cartUsecase) AddProductToShoppingCart(ctx context.Context, userID, pro
 	}
 
 	// Set the context and execute the request
-	client = &http.Client{}
+
 	resp, err = client.Do(req)
 	if err != nil {
 		return err
@@ -315,7 +315,7 @@ func (pu *cartUsecase) RemoveProductFromShoppingCart(ctx context.Context, userID
 			}
 
 			// Set the context and execute the request
-			client = &http.Client{}
+
 			resp, err = client.Do(req)
 			if err != nil {
 				return err
@@ -345,7 +345,7 @@ func (pu *cartUsecase) RemoveProductFromShoppingCart(ctx context.Context, userID
 			}
 
 			// Set the context and execute the request
-			client = &http.Client{}
+
 			resp, err = client.Do(req)
 			if err != nil {
 				return err

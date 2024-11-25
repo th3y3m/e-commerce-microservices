@@ -36,11 +36,16 @@ func NewUserUsecase(userRepo repository.IUserRepository, log *logrus.Logger) IUs
 }
 
 func (pu *userUsecase) GetUser(ctx context.Context, req *model.GetUserRequest) (*model.GetUserResponse, error) {
-	pu.log.Infof("Fetching user with ID: %d", *req.UserID)
+	pu.log.Infof("Fetching user with ID: %d or email: %s", req.UserID, req.Email)
 	user, err := pu.userRepo.Get(ctx, req.UserID, req.Email)
 	if err != nil {
 		pu.log.Errorf("Error fetching user: %v", err)
 		return nil, err
+	}
+
+	if user == nil {
+		pu.log.Errorf("User not found")
+		return &model.GetUserResponse{}, nil
 	}
 
 	pu.log.Infof("Fetched user: %+v", user)

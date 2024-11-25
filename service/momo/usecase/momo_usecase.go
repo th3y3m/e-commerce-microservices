@@ -210,7 +210,6 @@ func (s *MoMoService) ValidateMoMoResponse(queryString url.Values) (*model.Payme
 		}
 		req.Header.Set("Content-Type", "application/json")
 
-		client = &http.Client{}
 		res, err = client.Do(req)
 		if err != nil {
 			s.log.Errorf("Failed to create payment in payment service: %v", err)

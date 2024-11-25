@@ -300,7 +300,7 @@ func (o *mailUsecase) SendNotification(ctx context.Context, orderID int64, urlPa
 	}
 
 	// Set the context and execute the request
-	client = &http.Client{}
+
 	resp, err = client.Do(req)
 	if err != nil {
 		o.log.Errorf("Failed to execute request: %v", err)

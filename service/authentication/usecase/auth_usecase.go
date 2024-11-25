@@ -124,9 +124,15 @@ func (o *authUsecase) RegisterCustomer(email, password, confirmPassword string) 
 		return errors.New("user already exists")
 	}
 
+	var defaultVerification = false
+
 	newUser := model.CreateUserRequest{
-		Email:    email,
-		Password: hashedPassword,
+		Email:      email,
+		Password:   hashedPassword,
+		Role:       "Customer",
+		Provider:   "System",
+		ImageURL:   constant.DEFAULT_USER_IMAGE,
+		IsVerified: &defaultVerification,
 	}
 
 	// Marshal the new user data to JSON
@@ -193,7 +199,6 @@ func (o *authUsecase) RegisterCustomer(email, password, confirmPassword string) 
 	// Set the appropriate headers
 	req.Header.Set("Content-Type", "application/json")
 
-	client = &http.Client{}
 	res, err = client.Do(req)
 	if err != nil {
 		o.log.Errorf("Failed to update user in user service: %v", err)
@@ -215,20 +220,20 @@ func (o *authUsecase) RegisterCustomer(email, password, confirmPassword string) 
 	}
 
 	// Send a verification email to the user
-	url = constant.MAIL_SERVICE + "/send-mail?to=" + newUser.Email + "&token=" + token
+	// url = constant.MAIL_SERVICE + "/send-mail?to=" + newUser.Email + "&token=" + token
 
-	res, err = http.Post(url, "application/json", nil)
-	if err != nil {
-		o.log.Errorf("Failed to send verification email: %v", err)
-		return err
-	}
-	defer res.Body.Close()
+	// res, err = http.Post(url, "application/json", nil)
+	// if err != nil {
+	// 	o.log.Errorf("Failed to send verification email: %v", err)
+	// 	return err
+	// }
+	// defer res.Body.Close()
 
-	// Check for a successful status code
-	if res.StatusCode != http.StatusOK {
-		o.log.Errorf("Error sending verification email: received status %v", res.StatusCode)
-		return errors.New("error sending verification email")
-	}
+	// // Check for a successful status code
+	// if res.StatusCode != http.StatusOK {
+	// 	o.log.Errorf("Error sending verification email: received status %v", res.StatusCode)
+	// 	return errors.New("error sending verification email")
+	// }
 
 	return nil
 }
